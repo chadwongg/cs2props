@@ -12,6 +12,21 @@ every bet placed, and grades its own accuracy against real results.
 feature is refusal: most days it prints "no slips today," and its live record
 is the experiment, not the product.
 
+## The dashboard
+
+Live local page: background refresh/grade jobs, per-book records with an
+explicit legacy-era cutoff, one-click bet tracking, and per-leg closing-line
+value on every open slip.
+
+![dashboard — records, open slips, CLV](docs/dashboard.png)
+
+Suggestion cards (illustrative data — the board usually shows nothing,
+which is the point): verified payout in the corner, joint-simulation win
+probability, EV before and after the learned optimism haircut, and an
+explicit note when correlation contributes nothing.
+
+![slip suggestion cards](docs/slipcards.png)
+
 ## Architecture
 
 ```
