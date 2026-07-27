@@ -1,103 +1,99 @@
-# cs2props — a pricing & backtesting system for CS2 player props
+# cs2props
 
 ![ci](https://github.com/chadwongg/cs2props/actions/workflows/ci.yml/badge.svg)
 
-A quantitative research project: can a statistical model price Counter-Strike 2
-player props (kills / headshots) well enough to beat the payout structures of
-DFS pick'em books? The system ingests live boards from two books, simulates
-matches, prices every legal slip at what the book will *actually* pay, tracks
-every bet placed, and grades its own accuracy against real results.
+**A stats model for Counter-Strike 2 player props — it prices the bets,
+tracks every one I place, and grades its own accuracy.**
 
-**This is a measurement instrument, not a money printer.** Its most important
-feature is refusal: most days it prints "no slips today," and its live record
-is the experiment, not the product.
+Apps like PrizePicks and Underdog let you bet on stat lines for pro CS2
+players ("will this player get more or less than 24.5 kills?"). This project
+asks one question: **can a model find lines those apps have priced wrong?**
 
-## The dashboard
+It doesn't just guess. It keeps score on itself — every bet is logged, graded
+against real match results, and the model automatically discounts its own
+confidence when its live record says it's been too optimistic.
 
-Live local page: background refresh/grade jobs, per-book records with an
-explicit legacy-era cutoff, one-click bet tracking, and per-leg closing-line
-value on every open slip.
+**Most days it says "no bets today."** That's a feature. A tool that always
+finds you a bet is selling you action, not an edge.
+
+## What it looks like
+
+The local dashboard: refresh the board and grade finished bets with one
+click, see the win/loss record per book, and watch every open bet with its
+closing-line value (did the line move in my favor after I bet?).
 
 ![dashboard — records, open slips, CLV](docs/dashboard.png)
 
-Suggestion cards (illustrative data — the board usually shows nothing,
-which is the point): verified payout in the corner, joint-simulation win
-probability, EV before and after the learned optimism haircut, and an
-explicit note when correlation contributes nothing.
+When the model *does* find something, it shows a card (example data below):
+what the bet pays, how often the simulation thinks it hits, and the expected
+value — before and after the model's self-applied skepticism discount.
 
 ![slip suggestion cards](docs/slipcards.png)
 
-## Architecture
+## How it works, in five steps
 
-```
-ingest/          three pipelines: two books' APIs (reverse-engineered payloads,
-                 rate-limited, disk-cached) + a stats site backfill
-                 (~155k player-map rows across ~7.8k pro matches)
-model/           per-player exponentially-weighted state (20-map half-life),
-                 opponent adjustment, role-aware headshot priors with
-                 empirical-Bayes shrinkage; walk-forward backtesting with
-                 reliability curves, log loss, PIT histograms
-correlation/     generative Monte Carlo over the full match (series length,
-                 map winners, round counts, kill shares) — 50k iterations,
-                 joint hit matrices rather than products of marginals
-optimizer/       exhaustive slip search under each book's real rules:
-                 verified payout ladders, structural payout-shift limits,
-                 per-side price shades, push (whole-number line) voiding,
-                 Kelly-growth ranking for multi-tier ("flex") products
-tracker/adaptive live bet log with automatic grading against ingested
-                 results, and a per-leg optimism haircut learned by
-                 shrinkage from the model's own graded record
-server/report    local dashboard: one-click bet tracking, background
-                 rescan/grade jobs, per-book records with an explicit
-                 legacy-era cutoff
-```
+1. **Learn the players.** A year of pro match history — about 155,000
+   individual map performances. Recent games count more than old ones.
+2. **Simulate every match 50,000 times.** Not "he averages 25 kills" — it
+   plays out the whole game: how long the series goes, who wins each map,
+   how many rounds, and how the kills fall. The probability of a bet hitting
+   is just how often it hit across 50,000 simulated games.
+3. **Respect the bookmaker.** The model blends its own estimate with the
+   book's line, because the line contains information the model can't see
+   (roster news, sharp money). It also discounts every probability by an
+   amount *learned from its own losing bets*.
+4. **Price the bet at what the book actually pays.** The apps quietly reduce
+   payouts for certain slip structures. Those rules aren't documented — they
+   were worked out by building test slips in the app and reading what it
+   quoted. The optimizer only suggests slips that get the full payout.
+5. **Keep score.** Every bet is graded automatically when matches finish.
+   The running hit rate is the whole experiment: the legs need to hit ~54%
+   for the math to work, and the record says whether they do.
 
-## What the research actually found
+## What I learned building it
 
-- **Calibration ≠ edge.** The projector is well calibrated against held-out
-  history (log loss 0.6365 vs 0.6927 base rate; reliability within ±1pt across
-  90k observations) — but calibration against *synthetic* lines says nothing
-  about beating a book's line. A separate backtest against archived **real**
-  lines is the test that matters.
-- **Payout structure dominates.** The books' ladders differ enough that
-  product choice swings EV by 30+ points at the same hit rate. Several payout
-  rules are undocumented and were isolated by controlled in-app experiments
-  (e.g. the payout shift is cumulative in same-match *pairs*, team-agnostic).
-- **Correlation exists but the books charge more than it's worth.** Measured
-  teammate kill correlation ≈ +0.21, cross-team ≈ +0.13; the structural
-  payout penalty for stacking exceeds the probability gain, so optimal slips
-  are diversified — the joint simulator's main job becomes pricing honesty
-  rather than stack-hunting.
-- **Measurement bugs are the real enemy.** Whole-number pushes silently
-  credited as wins (+6.1pt per leg), a grader matching the wrong match on
-  double-header days, and a join that mixed two books' lines each produced
-  confident, wrong conclusions until found and pinned with regression tests.
+- **A model can be "accurate" and still lose.** The model predicts player
+  stats well by standard measures — but the books' lines are built from the
+  same public data, so being accurate isn't enough. You have to know
+  something the line doesn't. Testing against the books' *real* lines
+  (not the model's own practice questions) was the honest test.
+- **The payout fine print matters more than the model.** Choosing the wrong
+  bet type on the same predictions swings the outcome by 30+ points of
+  expected value. The biggest single improvement to this project wasn't a
+  smarter model — it was reading the payout rules carefully.
+- **Correlation is real but overpriced.** Teammates' kill counts rise and
+  fall together (measured: +0.21). The apps know this and cut the payout for
+  stacked slips by more than the correlation is worth — so the optimizer
+  deliberately spreads bets across different matches.
+- **Most bugs look like profits or losses.** A rounding case silently
+  counted as a win, a grader once read the wrong match, a query mixed the two
+  books' lines. Each produced a confident, wrong conclusion. Each is now a
+  regression test.
 
-## Honest status
+## Where it stands
 
-Live record to date is small-sample and unprofitable; the current
-configuration (correct products, corrected pricing and grading) started a
-fresh tracking era and needs a few hundred graded legs before the hit rate
-means anything. The repo exists because the *instrument* is the interesting
-part.
+The live record is small and not yet profitable. After fixing the bugs above
+and switching to the right bet types, the tracking was restarted clean — it
+needs a few hundred graded bets before the hit rate means anything. The
+interesting part of this repo is the instrument, not the balance.
 
-## Tooling
+## Tech
 
-Python 3.11+, `uv`, fully type-hinted (`mypy` clean), 229 `pytest` tests,
-SQLite, stdlib-only web dashboard.
+Python 3.11+ · fully type-hinted (`mypy` clean) · 229 tests · SQLite ·
+Monte Carlo simulation · walk-forward backtesting · a stdlib-only web
+dashboard · `uv` for everything.
 
 ```bash
-uv run cs2props scan          # fetch boards, simulate, search, write report
+uv run cs2props scan          # fetch boards, simulate, suggest slips
 uv run cs2props serve         # local dashboard
-uv run cs2props calibrate     # walk-forward backtest, calibration report
-uv run cs2props reallines     # backtest vs archived real book lines
-uv run cs2props crossbook     # line-disagreement study between books
+uv run cs2props calibrate     # backtest the model against history
+uv run cs2props reallines     # backtest against real archived book lines
 uv run pytest && uv run mypy cs2props/
 ```
 
 ## Disclaimer
 
-Personal research project. Not affiliated with, endorsed by, or supported by
-any sportsbook or data provider. Nothing here is betting advice; the model's
-own dashboard documents it losing money. Scraped data and the author's
-betting records are deliberately excluded from this repository.
+Personal research project. Not affiliated with any sportsbook or data
+provider. Nothing here is betting advice — the dashboard itself documents
+the model losing money. Scraped data and my own betting records are excluded
+from this repository.
