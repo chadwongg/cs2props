@@ -1,5 +1,7 @@
 # cs2props — a pricing & backtesting system for CS2 player props
 
+![ci](https://github.com/chadwongg/cs2props/actions/workflows/ci.yml/badge.svg)
+
 A quantitative research project: can a statistical model price Counter-Strike 2
 player props (kills / headshots) well enough to beat the payout structures of
 DFS pick'em books? The system ingests live boards from two books, simulates
