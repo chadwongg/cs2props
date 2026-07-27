@@ -217,3 +217,46 @@ def test_settling_early_does_not_orphan_the_remaining_legs(
         "SELECT status FROM slip_legs ORDER BY leg_no")]
     assert "pending" not in statuses, f"orphaned leg: {statuses}"
     assert statuses == ["lost", "won"]
+
+
+def test_flex_slip_pays_the_tier_not_all_or_nothing(tmp_path: Path) -> None:
+    """Found live 2026-07-27: a 5-pick flex that went 3/5 was settled as
+    "lost $0.00" while PrizePicks paid $0.40 — the UI had stored it as
+    "power" and the power path early-settled it on the first lost leg."""
+    conn = _seed(tmp_path, [
+        _row("f1", 20, 9, 1), _row("f1", 15, 7, 2),
+        _row("f2", 20, 9, 1), _row("f2", 15, 7, 2),
+        _row("f3", 20, 9, 1), _row("f3", 15, 7, 2),
+        _row("f4", 20, 9, 1), _row("f4", 15, 7, 2),
+        _row("f5", 20, 9, 1), _row("f5", 15, 7, 2),
+    ])
+    track_slip(conn, "prizepicks", 1.0, [
+        parse_leg("f1 over 30.5 kills 1-2"),   # 35 -> win
+        parse_leg("f2 over 30.5 kills 1-2"),   # 35 -> win
+        parse_leg("f3 over 30.5 kills 1-2"),   # 35 -> win
+        parse_leg("f4 under 30.5 kills 1-2"),  # 35 -> LOSS
+        parse_leg("f5 under 30.5 kills 1-2"),  # 35 -> LOSS
+    ], placed_at=PLACED, product="flex")
+    assert grade_open_slips(conn) == 1
+    status, payout = conn.execute(
+        "SELECT status, payout FROM slips").fetchone()
+    # 3-of-5 flex pays 0.4x: the app calls it a Win, but a $0.40 return on a
+    # $1 stake is a net loss — recorded as such, with the payout kept so the
+    # P&L stays honest.
+    assert payout == 0.4
+    assert status == "lost"
+
+
+def test_flex_slip_never_settles_early(tmp_path: Path) -> None:
+    """One lost leg decides a power slip; a flex slip can still cash a lower
+    tier, so it must wait for every leg."""
+    conn = _seed(tmp_path, [
+        _row("g1", 20, 9, 1), _row("g1", 15, 7, 2),
+    ])
+    track_slip(conn, "prizepicks", 1.0, [
+        parse_leg("g1 under 30.5 kills 1-2"),   # 35 -> LOSS
+        parse_leg("ghost over 5.5 kills 1-2"),  # unplayed -> pending
+    ], placed_at=PLACED, product="flex")
+    grade_open_slips(conn)
+    assert conn.execute(
+        "SELECT status FROM slips").fetchone()[0] == "pending"

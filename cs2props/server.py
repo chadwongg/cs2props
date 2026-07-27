@@ -185,6 +185,7 @@ class ReportHandler(SimpleHTTPRequestHandler):
                                if payload.get("claimed_p") else None),
                     multiplier=(float(payload["mult"])
                                 if payload.get("mult") else None),
+                    product=str(payload.get("product") or "power"),
                 )
                 conn.close()
             log.info("tracked %s from the report UI", slip_id)

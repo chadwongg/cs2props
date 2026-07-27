@@ -76,13 +76,14 @@ def track_slip(
     claimed_p: float | None = None,
     placed_at: float | None = None,
     multiplier: float | None = None,
+    product: str = "power",
 ) -> str:
     slip_id = uuid.uuid4().hex[:8]
     conn.execute(
         "INSERT INTO slips (slip_id, book, placed_at, stake, n_legs, claimed_p,"
-        " multiplier) VALUES (?,?,?,?,?,?,?)",
+        " multiplier, product) VALUES (?,?,?,?,?,?,?,?)",
         (slip_id, book, placed_at or time.time(), stake, len(legs), claimed_p,
-         multiplier),
+         multiplier, product),
     )
     conn.executemany(
         "INSERT INTO slip_legs (slip_id, leg_no, player_name, side, line,"
@@ -304,7 +305,26 @@ def grade_open_slips(conn: sqlite3.Connection) -> int:
             continue
         n_void = statuses.count("void")
         n_live = len(statuses) - n_void
-        if "lost" in statuses:
+        if product_of(conn, slip_id) == "flex":
+            # FLEX pays on tiers, not all-or-nothing. Found live 2026-07-27:
+            # a 5-pick flex that went 3/5 was settled here as "lost $0.00"
+            # while PrizePicks paid $0.40 — the slip had been stored as
+            # "power" (the UI never passed the product) and the power path
+            # early-settled it on its first lost leg. A flex slip settles
+            # only when every leg is terminal, and pays the tier its LIVE
+            # wins land in (voids shrink the ladder, mirroring the book).
+            wins = statuses.count("won")
+            if n_live < 2:
+                new_status, payout = "won", stake  # refund
+            else:
+                tier = load_payouts(book).flex_multiplier(n_live, wins)
+                payout = stake * tier
+                # A partial-return tier below the stake (e.g. 3/5 -> 0.4x)
+                # is labeled "Win" in the app but is a net LOSS. Counting it
+                # as a W would inflate the record; the payout row keeps the
+                # P&L honest either way.
+                new_status = "won" if payout >= stake else "lost"
+        elif "lost" in statuses:
             new_status, payout = "lost", 0.0
         elif n_live < 2:
             new_status, payout = "won", stake  # too few live legs -> refund

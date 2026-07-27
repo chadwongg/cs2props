@@ -55,6 +55,7 @@ class SlipView:
     book: str = ""
     ev_adj_pct: float = 0.0  # EV after the model's optimism haircut
     delta_is_real: bool = False  # correlation bonus above Monte Carlo noise
+    product: str = "power"  # settles all-or-nothing (power) or by tier (flex)
 
 
 @dataclass(frozen=True)
@@ -207,6 +208,7 @@ def _slip_card(s: SlipView) -> str:
   <div class="lockrow">
     <button class="lockin" data-legs="{html.escape(s.legs_json, quote=True)}"
             data-book="{s.book}" data-p="{s.p_correlated:.4f}"
+            data-product="{s.product}"
             onclick="lockIn(this)"
             title="I placed this — $1 at {s.multiplier:g}x">✓</button>
     <button class="adjust" onclick="toggleAdjust(this)"
@@ -671,6 +673,7 @@ function lockIn(btn) {{
   var row = btn.parentElement, card = btn.closest(".slip");
   var body = {{
     book: btn.dataset.book,
+    product: btn.dataset.product || "power",
     claimed_p: parseFloat(btn.dataset.p),
     legs: JSON.parse(btn.dataset.legs),
     stake: parseFloat(row.querySelector(".stake").value) || 1,

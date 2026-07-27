@@ -665,6 +665,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 p_correlated=s.p_all,
                 p_independent=s.p_independent,
                 delta_is_real=s.delta_is_real,
+                product=s.product,
                 breakeven=s.breakeven_multiplier,
                 legs_json=__import__("json").dumps(_leg_specs(s)),
                 book=book,
