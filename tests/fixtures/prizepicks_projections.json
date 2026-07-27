@@ -1,0 +1,216 @@
+{
+  "data": [
+    {
+      "type": "projection",
+      "id": "5301001",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "FaZe",
+        "line_score": 32.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T14:00:00-04:00",
+        "stat_type": "MAPS 1-2 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241001" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301002",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "FaZe",
+        "line_score": 15.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T14:00:00-04:00",
+        "stat_type": "MAPS 1-2 Headshots",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241001" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301003",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "FaZe",
+        "line_score": 41.5,
+        "odds_type": "demon",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T14:00:00-04:00",
+        "stat_type": "MAPS 1-2 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241002" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301004",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "FaZe",
+        "line_score": 24.5,
+        "odds_type": "goblin",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T14:00:00-04:00",
+        "stat_type": "MAPS 1-2 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241002" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301005",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "Vitality",
+        "line_score": 29.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T17:00:00-04:00",
+        "stat_type": "MAPS 1-2 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241003" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301006",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "Vitality",
+        "line_score": 0.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T17:00:00-04:00",
+        "stat_type": "MAP 3 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241003" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301007",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "MOUZ",
+        "line_score": 44.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T17:00:00-04:00",
+        "stat_type": "Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "241004" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    },
+    {
+      "type": "projection",
+      "id": "5301999",
+      "attributes": {
+        "board_time": "2026-07-24T12:00:00-04:00",
+        "description": "G2",
+        "line_score": 27.5,
+        "odds_type": "standard",
+        "projection_type": "Single Stat",
+        "start_time": "2026-07-25T20:00:00-04:00",
+        "stat_type": "MAPS 1-2 Kills",
+        "status": "pre_game",
+        "updated_at": "2026-07-24T11:58:03-04:00"
+      },
+      "relationships": {
+        "new_player": { "data": { "type": "new_player", "id": "999999" } },
+        "league": { "data": { "type": "league", "id": "265" } }
+      }
+    }
+  ],
+  "included": [
+    {
+      "type": "new_player",
+      "id": "241001",
+      "attributes": {
+        "display_name": "donk",
+        "name": "donk",
+        "team": "Spirit",
+        "team_name": "Team Spirit",
+        "position": "Rifler",
+        "league": "CS2",
+        "league_id": 265
+      }
+    },
+    {
+      "type": "new_player",
+      "id": "241002",
+      "attributes": {
+        "display_name": "sh1ro",
+        "name": "sh1ro",
+        "team": "Spirit",
+        "team_name": "Team Spirit",
+        "position": "AWPer",
+        "league": "CS2",
+        "league_id": 265
+      }
+    },
+    {
+      "type": "new_player",
+      "id": "241003",
+      "attributes": {
+        "display_name": "m0NESY",
+        "name": "m0NESY",
+        "team": "Falcons",
+        "team_name": "Team Falcons",
+        "position": "AWPer",
+        "league": "CS2",
+        "league_id": 265
+      }
+    },
+    {
+      "type": "new_player",
+      "id": "241004",
+      "attributes": {
+        "display_name": "ropz",
+        "name": "ropz",
+        "team": "Vitality",
+        "team_name": "Team Vitality",
+        "position": "Rifler",
+        "league": "CS2",
+        "league_id": 265
+      }
+    },
+    {
+      "type": "league",
+      "id": "265",
+      "attributes": { "name": "CS2", "sport": "esports" }
+    }
+  ],
+  "meta": { "total_count": 8, "current_page": 1 }
+}

@@ -1,0 +1,32 @@
+# --- data: scraped boards, results history, and my own betting record ---
+# The SQLite file holds a year of ingested match data plus every slip I have
+# placed. Neither belongs in a public repo: the scraped data is other sites'
+# content, and the betting record is personal.
+cs2props.db
+*.db
+*.db.bak
+
+# board snapshots / API payloads saved to disk
+.cache/
+pp.json
+picks.json
+
+# generated artifacts
+cs2report.html
+calibration.json
+logs/
+*.log
+
+# --- pre-rewrite prototype (kept locally, superseded by cs2props/) ---
+edge_finder.py
+index.html
+picks.html
+
+# --- environment / tooling ---
+.venv/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+*.egg-info/
+.claude/
+.DS_Store
