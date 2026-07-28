@@ -607,11 +607,31 @@ function runJob(btn, endpoint, job) {{
       Math.round((Date.now() - t0) / 1000) + "s";
   }}, 1000);
   fetch(endpoint, {{method: "POST"}}).then(function () {{
+    var sawRunning = false;
     var poll = setInterval(function () {{
+      // Hard stop after 15 minutes: a backfill pages bo3.gg politely and
+      // can legitimately run a few minutes, but past that something is
+      // wrong and an endlessly climbing counter is worse than saying so.
+      if (Date.now() - t0 > 15 * 60 * 1000) {{
+        clearInterval(poll); clearInterval(tick);
+        btn.disabled = false;
+        btn.textContent = job + " still running \u2014 reload later";
+        return;
+      }}
       fetch("/api/scan-status?job=" + job)
         .then(function (r) {{ return r.json(); }})
         .then(function (d) {{
           if (d.state === "done") {{
+            clearInterval(poll); clearInterval(tick);
+            location.reload();
+          }} else if (d.state === "running") {{
+            sawRunning = true;
+          }} else if (d.state === "idle" && sawRunning) {{
+            // The job vanished without reporting done — the server was
+            // restarted mid-run and lost its job table. Without this
+            // branch the counter climbs FOREVER (the poll only stopped on
+            // done/failed). Reload: the page shows whatever actually
+            // landed, which beats a stuck spinner lying about progress.
             clearInterval(poll); clearInterval(tick);
             location.reload();
           }} else if (d.state && d.state.indexOf("failed") === 0) {{
@@ -619,7 +639,8 @@ function runJob(btn, endpoint, job) {{
             btn.disabled = false;
             btn.textContent = job + " failed \u2014 retry";
           }}
-        }});
+        }})
+        .catch(function () {{ /* server restarting; keep polling */ }});
     }}, 3000);
   }}).catch(function () {{
     clearInterval(tick);
