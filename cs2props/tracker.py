@@ -168,6 +168,13 @@ def _grade_leg(
     ).fetchall()
     mine = [r for r in rows if clean_name(r[0]) == target]
     if not mine:
+        # bo3.gg decorates nicknames the board does not ("Salazar_9" for the
+        # board's "Salazar", found 2026-07-27 blocking a settled leg) — fall
+        # back to the same loose comparison the stand-in detector uses.
+        from cs2props.standins import _same_person
+
+        mine = [r for r in rows if _same_person(r[0], player)]
+    if not mine:
         return "pending", None
     # WHICH match? Taking the earliest one after placement is wrong: players
     # routinely play twice in a day, and the prop names a specific opponent.
@@ -222,6 +229,52 @@ def product_of(conn: sqlite3.Connection, slip_id: str) -> str:
         "SELECT product FROM slips WHERE slip_id=?", (slip_id,)
     ).fetchone()
     return str(row[0]) if row and row[0] else "power"
+
+
+def manual_grade_leg(
+    conn: sqlite3.Connection,
+    slip_id: str,
+    leg_no: int,
+    observed: float | None,
+    dnp: bool = False,
+) -> str:
+    """Grade one leg from a number the user read off the book's own app.
+
+    Exists because auto-grading has hard limits found live 2026-07-27:
+    bo3.gg does not cover every tier-C/qualifier event the books post
+    (three settled legs had no results to grade against at all), and a
+    player the book voids as "did not play" never gets a row, so his leg
+    would sit pending forever. The book's app shows the real number either
+    way — this records it. DNP grades as void, a total exactly on the line
+    as a push (void), otherwise won/lost by side.
+    """
+    row = conn.execute(
+        "SELECT side, line, status FROM slip_legs WHERE slip_id=? AND leg_no=?",
+        (slip_id, leg_no),
+    ).fetchone()
+    if row is None:
+        raise ValueError(f"no leg {slip_id}/{leg_no}")
+    side, line, cur = str(row[0]), float(row[1]), str(row[2])
+    if cur != "pending":
+        return cur  # never silently overwrite an auto-graded result
+    if dnp or observed is None:
+        status: str = "void"
+        observed = None
+    elif observed == line:
+        status = "void"  # push
+    elif observed > line:
+        status = "won" if side == "over" else "lost"
+    else:
+        status = "won" if side == "under" else "lost"
+    conn.execute(
+        "UPDATE slip_legs SET status=?, observed=? WHERE slip_id=? AND leg_no=?",
+        (status, observed, slip_id, leg_no),
+    )
+    conn.commit()
+    log.info("manually graded %s/%s -> %s (obs %s)",
+             slip_id, leg_no, status, observed)
+    grade_open_slips(conn)  # settle the slip if that was its last leg
+    return status
 
 
 def grade_open_slips(conn: sqlite3.Connection) -> int:
@@ -317,7 +370,17 @@ def grade_open_slips(conn: sqlite3.Connection) -> int:
             if n_live < 2:
                 new_status, payout = "won", stake  # refund
             else:
-                tier = load_payouts(book).flex_multiplier(n_live, wins)
+                pay = load_payouts(book)
+                if n_live in pay.flex:
+                    tier = pay.flex_multiplier(n_live, wins)
+                else:
+                    # Voids can shrink a flex below the smallest flex tier
+                    # (PrizePicks has none under 3 picks). The book then
+                    # converts it to a standard all-must-hit play at that
+                    # size — not zero, which is what a blind table lookup
+                    # returns.
+                    tier = (pay.power.get(n_live, 0.0)
+                            if wins == n_live else 0.0)
                 payout = stake * tier
                 # A partial-return tier below the stake (e.g. 3/5 -> 0.4x)
                 # is labeled "Win" in the app but is a net LOSS. Counting it
@@ -551,16 +614,17 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
             for c in clv_by_slip.get(sid, [])
         }
         legs = []
-        for r in conn.execute(
+        for leg_no, r in enumerate(conn.execute(
             "SELECT side, player_name, line, stat_kind, status, observed"
             " FROM slip_legs WHERE slip_id=? ORDER BY leg_no", (sid,)
-        ):
+        )):
             c = clv_rows.get((clean_name(r[1]), r[0].lower()))
             legs.append(TrackedLeg(
                 side=r[0], player=r[1], line=float(r[2]), stat=r[3],
                 status=r[4], observed=r[5],
                 clv=c.clv if c else None,
                 closing_line=c.closing_line if c else None,
+                slip_id=sid, leg_no=leg_no,
             ))
         have = [l.clv for l in legs if l.clv is not None]
         slip_clv = sum(have) / len(have) if have else None

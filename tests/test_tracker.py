@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import sqlite3
 from pathlib import Path
 
 from cs2props import db
@@ -260,3 +261,42 @@ def test_flex_slip_never_settles_early(tmp_path: Path) -> None:
     grade_open_slips(conn)
     assert conn.execute(
         "SELECT status FROM slips").fetchone()[0] == "pending"
+
+
+def test_manual_grade_settles_what_auto_grade_cannot(tmp_path: Path) -> None:
+    """bo3.gg skips whole tier-C events (three settled legs had nothing to
+    grade against, 2026-07-27) and a did-not-play void never gets a row. The
+    user reads the settled number in the book's app; recording it must grade
+    the leg and settle the slip through the normal path."""
+    from cs2props.tracker import manual_grade_leg
+
+    conn = _seed(tmp_path, [])
+    track_slip(conn, "prizepicks", 1.0, [
+        parse_leg("ghostA over 24.5 kills 1-2"),
+        parse_leg("ghostB under 20.5 kills 1-2"),
+        parse_leg("ghostC over 30.5 kills 1-2"),
+    ], placed_at=PLACED, product="flex")
+    assert manual_grade_leg(conn, _only_slip(conn), 0, 29.0) == "won"
+    assert manual_grade_leg(conn, _only_slip(conn), 1, 25.0) == "lost"
+    assert manual_grade_leg(conn, _only_slip(conn), 2, None, dnp=True) == "void"
+    status, payout = conn.execute(
+        "SELECT status, payout FROM slips").fetchone()
+    # the DNP void shrinks the 3-flex below the smallest flex tier, so it
+    # converts to an all-must-hit play — 1 win of 2 live pays nothing
+    assert status == "lost" and payout == 0.0
+
+
+def test_manual_grade_never_overwrites_an_auto_grade(tmp_path: Path) -> None:
+    from cs2props.tracker import manual_grade_leg
+
+    conn = _seed(tmp_path, [_row("h1", 20, 9, 1), _row("h1", 15, 7, 2)])
+    track_slip(conn, "prizepicks", 1.0, [
+        parse_leg("h1 over 30.5 kills 1-2"),   # 35 -> auto-won
+        parse_leg("ghost over 5.5 kills 1-2"),
+    ], placed_at=PLACED)
+    grade_open_slips(conn)
+    assert manual_grade_leg(conn, _only_slip(conn), 0, 1.0) == "won"
+
+
+def _only_slip(conn: "sqlite3.Connection") -> str:
+    return str(conn.execute("SELECT slip_id FROM slips").fetchone()[0])

@@ -149,6 +149,29 @@ class ReportHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming
+        if self.path == "/api/grade-leg":
+            try:
+                n = int(self.headers.get("Content-Length", 0))
+                payload = json.loads(self.rfile.read(n) or b"{}")
+                from cs2props.tracker import manual_grade_leg
+
+                with _LOCK:
+                    conn = db.connect(self.db_path)
+                    status = manual_grade_leg(
+                        conn,
+                        slip_id=str(payload["slip_id"]),
+                        leg_no=int(payload["leg_no"]),
+                        observed=(float(payload["observed"])
+                                  if payload.get("observed") not in (None, "")
+                                  else None),
+                        dnp=bool(payload.get("dnp")),
+                    )
+                    conn.close()
+                self._json({"ok": True, "status": status})
+            except Exception as e:
+                log.warning("manual grade failed: %s", e)
+                self._json({"ok": False, "error": str(e)}, 400)
+            return
         if self.path == "/api/rescan":
             self._start_job("scan", ["scan", "--db", str(self.db_path)])
             return

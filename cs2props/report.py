@@ -68,6 +68,8 @@ class TrackedLeg:
     observed: float | None
     clv: float | None = None  # + = line moved your way after you bet
     closing_line: float | None = None
+    slip_id: str = ""  # for manual grading of legs auto-grade cannot reach
+    leg_no: int = -1
 
 
 @dataclass(frozen=True)
@@ -273,11 +275,28 @@ def _tracked_card(t: TrackedSlip) -> str:
             c = "good" if l.clv > 0 else "bad" if l.clv < 0 else "flat"
             clv_html = (f'<span class="clv {c}" title="closed at '
                         f'{l.closing_line:g}">CLV {l.clv:+.1f}</span>')
+        # A pending leg on an open slip gets a manual-grade control. The
+        # auto-grader depends on bo3.gg, which skips whole tier-C events and
+        # cannot see "did not play" voids — but the user is looking at the
+        # settled number in the book's own app. Auto-graded legs never show
+        # this; manual entry fills gaps, it does not override.
+        manual = ""
+        if t.status == "pending" and l.status == "pending" and l.slip_id:
+            manual = (
+                f'<span class="mgrade">'
+                f'<input class="obs" type="number" step="0.5" '
+                f'placeholder="actual" title="total from the book\'s app">'
+                f'<button onclick="gradeLeg(this,\'{l.slip_id}\','
+                f'{l.leg_no},false)" title="record this total">save</button>'
+                f'<button onclick="gradeLeg(this,\'{l.slip_id}\','
+                f'{l.leg_no},true)" title="player did not play — void the '
+                f'leg">dnp</button></span>'
+            )
         legs += (
             f'<div class="tleg {l.status}"><span class="tmark">{mark}</span>'
             f'<span class="side {l.side.lower()}">{l.side.upper()}</span>'
             f'<b>{html.escape(l.player)}</b> {l.line:g} '
-            f'{html.escape(l.stat)}{got}{clv_html}</div>'
+            f'{html.escape(l.stat)}{got}{clv_html}{manual}</div>'
         )
     payout = (f"returned ${t.payout:.2f}" if t.payout is not None else "pending")
     claim = f"claimed {t.claimed_p:.1%}" if t.claimed_p else ""
@@ -469,6 +488,13 @@ color:var(--accent);font-variant-numeric:tabular-nums}}
 .record td.neg{{color:var(--bad)}}
 .legrate{{font-family:var(--mono);font-size:12px;color:var(--muted);
   margin-top:6px}}
+.mgrade{{margin-left:10px;display:inline-flex;gap:4px;align-items:center}}
+.mgrade .obs{{width:58px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--ink);border-radius:6px;padding:2px 6px;font-size:11px}}
+.mgrade button{{font-family:var(--mono);font-size:10px;color:var(--muted);
+  background:transparent;border:1px solid var(--line);border-radius:10px;
+  padding:2px 8px;cursor:pointer}}
+.mgrade button:hover{{color:var(--accent);border-color:var(--accent)}}
 #rescan,#grade{{margin-left:14px;font-family:var(--mono);font-size:11px;
   letter-spacing:.05em;color:var(--accent);background:transparent;
   border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
@@ -646,6 +672,21 @@ function runJob(btn, endpoint, job) {{
     clearInterval(tick);
     btn.disabled = false;
     btn.textContent = original;
+  }});
+}}
+
+function gradeLeg(btn, slipId, legNo, dnp) {{
+  var row = btn.closest(".tleg");
+  var obs = row.querySelector(".obs").value;
+  if (!dnp && obs === "") {{ row.querySelector(".obs").focus(); return; }}
+  btn.disabled = true;
+  fetch("/api/grade-leg", {{
+    method: "POST", headers: {{"Content-Type": "application/json"}},
+    body: JSON.stringify({{slip_id: slipId, leg_no: legNo,
+                          observed: dnp ? null : parseFloat(obs), dnp: dnp}})
+  }}).then(function (r) {{ return r.json(); }}).then(function (d) {{
+    if (d.ok) {{ location.reload(); }}
+    else {{ btn.disabled = false; btn.textContent = "err"; }}
   }});
 }}
 
