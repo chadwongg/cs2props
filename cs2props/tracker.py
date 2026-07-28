@@ -191,12 +191,24 @@ def _grade_leg(
             ts = _epoch(str(at))
             if ts is None:
                 continue
+            # A match cannot FINISH before its prop's start time. bo3.gg's
+            # clock skew only runs LATE (+~8h), so any candidate earlier
+            # than the start is a different game — z1Nny's leg was graded
+            # 44 off a morning match when his real evening match (25) was
+            # simply absent from bo3 (2026-07-27).
+            if ts < start - 2 * 3600:
+                continue
             gap = abs(ts - start)
             if best_gap is None or gap < best_gap:
                 best, best_gap = mid, gap
-        # a match more than 12h from the prop's start time is a DIFFERENT
-        # game; grading against it would invent a result
-        if best is not None and best_gap is not None and best_gap <= 12 * 3600:
+        # A match too far from the prop's start time is a DIFFERENT game.
+        # The window was 12h, which silently rejected REAL results: bo3.gg
+        # timestamps run hours ahead of true UTC (Salazar's settled match sat
+        # at a 21h apparent gap — ~13h real plus ~8h of source skew, found
+        # 2026-07-27). 26h absorbs the skew; the closest-match rule above
+        # still picks the right game on double-header days because both of a
+        # player's matches carry the same skew.
+        if best is not None and best_gap is not None and best_gap <= 26 * 3600:
             match_id = best
         else:
             return "pending", None
