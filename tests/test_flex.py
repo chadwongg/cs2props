@@ -127,3 +127,58 @@ def test_same_player_two_spellings_is_rejected() -> None:
     ok = [_leg("910"), _leg("charlie", team="B", sim=1),
           _leg("alpha", sim=2), _leg("bravo", team="B", sim=3)]
     assert is_submittable(ok, restr)
+
+
+def test_flex_pricing_shrinks_the_table_on_voids() -> None:
+    """User-verified 2026-07-29: a void (push on a whole-number line, or a
+    DNP) converts a 5-flex into a 4-flex. Pricing had counted a voided leg
+    as a plain miss — "4 of 5 -> 2x" — when the book actually pays
+    "4 of 4 -> 6x". Settlement already did this right; the optimizer's EV
+    has to agree with the tracker or slips are chosen on the wrong number."""
+    import numpy as np
+
+    from cs2props.config import load_payouts, load_restrictions
+    from cs2props.correlation.engine import SimResult
+    from cs2props.optimizer.search import _best_flex
+
+    n = 40_000
+    rng = np.random.default_rng(3)
+    hits = np.zeros((n, 5), dtype=bool)
+    short = np.zeros((n, 5), dtype=bool)
+    push = np.zeros((n, 5), dtype=bool)
+    for j in range(4):
+        hits[:, j] = rng.random(n) < 0.999  # four near-certain winners
+    push[:, 4] = True                       # fifth leg ALWAYS voids
+    res = SimResult(hits=hits, short=short, n_maps=np.full(n, 2), push=push,
+                    p_over=[0.999] * 4 + [0.5])
+
+    class _Sim:
+        result = res
+        props = [_prop(20.5 + i) for i in range(5)]
+
+    teams = ["A", "A", "B", "B", "C"]
+    legs = [Leg(0, j, "over", 0.99 if j < 4 else 0.5,
+                Leg(0, 0, "over", 0.5, _prop(), "A").prop, teams[j])
+            for j in range(5)]
+    # build legs against distinct matches so structure rules pass
+    legs = [Leg(j, 0, "over", 0.99 if j < 4 else 0.5, _leg(f"p{j}").prop,
+                teams[j]) for j in range(5)]
+
+    class _S:
+        def __init__(self, j): self.result = _mk_single(res, j)
+        props = None
+
+    def _mk_single(full, j):
+        return SimResult(hits=full.hits[:, [j]], short=full.short[:, [j]],
+                         n_maps=full.n_maps, push=full.push[:, [j]],
+                         p_over=[full.p_over[j]])
+
+    sims = [_S(j) for j in range(5)]
+    slips = _best_flex(sims, legs, 5, load_payouts("prizepicks"),
+                       load_restrictions("prizepicks"),
+                       min_adjusted_ev=-10.0, haircut=0.0)
+    assert slips, "the always-void slip must still price"
+    s = slips[0]
+    # four sure winners + one guaranteed void = a 4-flex paying 4-of-4 = 6x
+    # (old pricing said 4-of-5 = 2x)
+    assert s.ev > 4.0, f"void must shrink the table, got EV {s.ev:+.2f}"

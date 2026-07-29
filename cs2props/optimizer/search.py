@@ -626,6 +626,7 @@ def _best_flex(
     rng = np.random.default_rng(seed)
     hit_of: dict[int, np.ndarray] = {}
     thin_of: dict[int, np.ndarray] = {}
+    live_of: dict[int, np.ndarray] = {}
     for leg in pool:
         h, live = _leg_arrays(sims, leg)
         # a voided leg neither hits nor counts against you; treating it as a
@@ -633,6 +634,41 @@ def _best_flex(
         won = h & live
         hit_of[id(leg)] = won
         thin_of[id(leg)] = _thin(won, leg.p, haircut, rng)
+        live_of[id(leg)] = live
+
+    def _void_aware_ev(
+        won_arrs: list[np.ndarray], live_arrs: list[np.ndarray],
+        shade: float,
+    ) -> float:
+        """Mean payout per stake with voids SHRINKING the table.
+
+        The book converts a 5-flex with a void (push on a whole-number
+        line, or a DNP) into a 4-flex — user-verified 2026-07-29, and it is
+        how settlement already works. Pricing had counted those iterations
+        as plain misses instead: a push turned "4 of 4 -> 6x" into
+        "4 of 5 -> 2x", systematically undervaluing slips carrying
+        whole-number legs. Below the smallest flex table the book converts
+        to all-must-hit at that size; under 2 live legs the stake refunds.
+        """
+        k = np.zeros(won_arrs[0].shape[0], dtype=np.int8)
+        nl = np.zeros_like(k)
+        for w, lv in zip(won_arrs, live_arrs):
+            k += w
+            nl += lv
+        payout = np.zeros(k.shape[0])
+        for n_live in np.unique(nl):
+            m = nl == n_live
+            if n_live < 2:
+                payout[m] = 1.0  # refund
+                continue
+            tab = payouts.flex.get(int(n_live))
+            if tab:
+                for wins in np.unique(k[m]):
+                    payout[m & (k == wins)] = tab.get(int(wins), 0.0) * shade
+            else:
+                allhit = m & (k == nl)
+                payout[allhit] = payouts.power.get(int(n_live), 0.0) * shade
+        return float(payout.mean()) - 1.0
 
     out: list[Slip] = []
     for combo in itertools.combinations(pool, size):
@@ -640,21 +676,18 @@ def _best_flex(
         if not is_submittable(legs, restrictions):
             continue
         k = np.zeros(hit_of[id(legs[0])].shape[0], dtype=np.int8)
-        kt = np.zeros_like(k)
         for leg in legs:
             k += hit_of[id(leg)]
-            kt += thin_of[id(leg)]
         probs = tuple(float((k == j).mean()) for j in range(size + 1))
         # per-side shades scale every paying tier, not just the top one
         shade = slip_price_factor(legs)
         table = {j: m * shade for j, m in base_table.items()}
-        ev = sum(probs[j] * table.get(j, 0.0) for j in range(size + 1)) - 1.0
+        wons = [hit_of[id(l)] for l in legs]
+        lives = [live_of[id(l)] for l in legs]
+        ev = _void_aware_ev(wons, lives, shade)
         if ev <= MIN_SLIP_EV:
             continue
-        adj = sum(
-            float((kt == j).mean()) * table.get(j, 0.0)
-            for j in range(size + 1)
-        ) - 1.0
+        adj = _void_aware_ev([thin_of[id(l)] for l in legs], lives, shade)
         if adj < min_adjusted_ev:
             continue
         out.append(Slip(
