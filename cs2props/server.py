@@ -181,7 +181,7 @@ class ReportHandler(SimpleHTTPRequestHandler):
             # report "still pending" and look broken. The two-step is what
             # the manual routine always was.
             exe = str(Path(sys.executable).parent / "cs2props")
-            cmd = (f"{exe} backfill --db {self.db_path} --months 1 "
+            cmd = (f"{exe} backfill --db {self.db_path} --days 3 "
                    f"--limit 60 && {exe} grade --db {self.db_path}")
             self._start_job("grade", cmd, shell=True)
             return

@@ -166,20 +166,31 @@ def test_stale_cache_refetches(tmp_path: Path) -> None:
         calls["n"] += 1
         return httpx.Response(
             200,
-            json={"data": [{"type": "league", "id": "265", "attributes": {"name": "CS2"}}]},
+            json={"data": [{"type": "league", "id": "265",
+                            "attributes": {"name": "CS2"}}]},
         )
 
     client = _mk_client(tmp_path, httpx.MockTransport(handler), ttl=0.05)
     client.resolve_cs_league_id()
     time.sleep(0.1)
-    # stale cache -> refetch. Zero out the rate-limit stamp so the test
-    # doesn't sleep 60s.
+    # Zero out the rate-limit stamp so the test doesn't sleep 60s.
     stamp = client.cache_dir / ".last_request"
     import os
 
     os.utime(stamp, (time.time() - 120, time.time() - 120))
+    # /leagues deliberately IGNORES the short client TTL: re-resolving the
+    # league id every scan cost the full 60s rate-limit gap before
+    # /projections, doubling every board refresh, for an answer that has
+    # never changed. It refetches only after LEAGUES_CACHE_TTL_S (a day).
     client.resolve_cs_league_id()
-    assert calls["n"] == 2
+    assert calls["n"] == 1
+
+    # the generic per-scan cache still expires on the client TTL
+    client.fetch_projections("265")
+    time.sleep(0.1)
+    os.utime(stamp, (time.time() - 120, time.time() - 120))
+    client.fetch_projections("265")
+    assert calls["n"] == 3  # one warm leagues + two projections fetches
 
 
 def test_projections_cache_roundtrip(tmp_path: Path) -> None:

@@ -40,6 +40,12 @@ USER_AGENT = (
 )
 MIN_REQUEST_INTERVAL_S = 60.0
 DEFAULT_CACHE_TTL_S = 600.0
+# /leagues answers one question — "what id is CS2?" — and the answer has
+# never changed. Re-asking every scan cost the full 60s rate-limit gap
+# between it and /projections, doubling every board refresh. A day-long
+# cache keeps the resolve dynamic (never hardcoded, per spec) while making
+# the common scan a single request.
+LEAGUES_CACHE_TTL_S = 24 * 3600.0
 
 # League names PrizePicks has used for Counter-Strike, lowercased.
 CS_LEAGUE_NAMES = {"cs2", "csgo", "cs:go", "counter-strike 2", "counter-strike"}
@@ -195,13 +201,15 @@ class PrizePicksClient:
     def _cache_path(self, key: str) -> Path:
         return self.cache_dir / f"{key}.json"
 
-    def _read_cache(self, key: str) -> dict[str, Any] | None:
+    def _read_cache(
+        self, key: str, ttl_s: float | None = None
+    ) -> dict[str, Any] | None:
         path = self._cache_path(key)
         if not path.exists():
             return None
         wrapper = json.loads(path.read_text())
         age = time.time() - wrapper["fetched_at"]
-        if age > self.cache_ttl_s:
+        if age > (ttl_s if ttl_s is not None else self.cache_ttl_s):
             return None
         log.info("cache hit for %s (age %.0fs)", key, age)
         payload: dict[str, Any] = wrapper["payload"]
@@ -223,8 +231,11 @@ class PrizePicksClient:
 
     # -- requests ----------------------------------------------------------
 
-    def _get(self, path: str, params: dict[str, Any], cache_key: str) -> dict[str, Any]:
-        cached = self._read_cache(cache_key)
+    def _get(
+        self, path: str, params: dict[str, Any], cache_key: str,
+        cache_ttl_s: float | None = None,
+    ) -> dict[str, Any]:
+        cached = self._read_cache(cache_key, cache_ttl_s)
         if cached is not None:
             return cached
         self._respect_rate_limit()
@@ -245,7 +256,8 @@ class PrizePicksClient:
 
     def resolve_cs_league_id(self) -> str:
         """Hit /leagues and find the CS league id. Never hardcoded."""
-        payload = self._get("/leagues", {}, cache_key="leagues")
+        payload = self._get("/leagues", {}, cache_key="leagues",
+                            cache_ttl_s=LEAGUES_CACHE_TTL_S)
         for item in payload.get("data", []):
             name = str(item.get("attributes", {}).get("name", "")).lower()
             if name in CS_LEAGUE_NAMES:

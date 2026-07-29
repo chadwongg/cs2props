@@ -102,7 +102,16 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     from cs2props.ingest.bo3gg import Bo3Client, since_months_ago, stats_to_rows
 
     tiers = frozenset(t.strip().lower() for t in args.tiers.split(","))
-    since = since_months_ago(args.months)
+    if getattr(args, "days", None):
+        # Grading only needs matches as old as the oldest open slip — a few
+        # days. Walking a whole month of finished-match pages at the polite
+        # 2s-per-page pace made every grade-button press ~10x slower than
+        # the data it was actually after.
+        from datetime import datetime, timedelta, timezone
+
+        since = datetime.now(timezone.utc) - timedelta(days=args.days)
+    else:
+        since = since_months_ago(args.months)
     client = Bo3Client(delay_s=args.delay)
     conn = db.connect(Path(args.db))
     log.info(
@@ -876,6 +885,11 @@ def main() -> int:
         "backfill", help="ingest historical per-map stats from bo3.gg"
     )
     p_bf.add_argument("--months", type=int, default=12)
+    p_bf.add_argument(
+        "--days", type=float, default=None,
+        help="walk only this many days back (overrides --months); what the "
+             "dashboard grade button uses",
+    )
     p_bf.add_argument("--tiers", default="s,a,b")
     p_bf.add_argument("--delay", type=float, default=2.0)
     p_bf.add_argument("--db", default="cs2props.db")

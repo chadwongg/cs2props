@@ -30,7 +30,11 @@ from cs2props.model.state_builder import clean_name
 
 log = logging.getLogger(__name__)
 
-ROSTER_TTL_S = 3600.0
+# 4h, up from 1h: a cold roster refresh is ~40 paced bo3 requests (~80s),
+# and lineups do not churn hour-to-hour. Stand-in detection reads match
+# history, not this cache, so the freshness cost is limited to the benched
+# check.
+ROSTER_TTL_S = 4 * 3600.0
 DEFAULT_MAX_MATCHES = 40
 
 
