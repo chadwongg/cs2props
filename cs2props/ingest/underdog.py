@@ -111,12 +111,15 @@ def parse_lines(payload: dict[str, Any], sport_id: str = "CS") -> list[Prop]:
             side = {"higher": "over", "lower": "under"}.get(choice)
             if side:
                 side_mults[side] = float(o.get("payout_multiplier") or 1)
-        # "alt" is now reserved for the SCORCHER ladders — alternate lines
-        # sold at a big premium. A main line with a mild per-side shade stays
-        # on the standard board and gets priced, not discarded.
+        # The feed says which lines are alternates — believe it. A magnitude
+        # threshold ("alt if any multiplier is ±50%") let a 1.49x alternate
+        # ladder rung through as "standard": the optimizer then bet the
+        # UNDER of NAF 32.5 — an alternate that only SELLS the over — while
+        # the real balanced line sat at 25.5. The phantom 7-kill cushion was
+        # the whole edge on that card (2026-07-29).
         board = (
-            "alt" if any(m >= 1.5 or m <= 0.5 for m in side_mults.values())
-            else "standard"
+            "standard" if str(line.get("line_type", "")) == "balanced"
+            else "alt"
         )
         props.append(
             Prop(

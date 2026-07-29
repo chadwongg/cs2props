@@ -310,6 +310,12 @@ def collect_legs(sims: list[MatchSim]) -> list[Leg]:
             for side, p in (("over", p_over), ("under", 1.0 - p_over)):
                 if p < MIN_LEG_P:
                     continue
+                # A side the book does not sell is not a bet. Underdog's
+                # alternate rungs carry only a "higher" option; offering
+                # their under manufactured a 7-kill cushion out of thin air
+                # (NAF u32.5 "83%" against a real balanced line of 25.5).
+                if prop.side_multipliers and side not in prop.side_multipliers:
+                    continue
                 leg = Leg(si, pi, side, p, prop, prop.team)
                 cur = best_by_player.get(prop.player_name)
                 if cur is None or p > cur.p:
