@@ -617,10 +617,15 @@ def cmd_scan(args: argparse.Namespace) -> int:
                 # what the book will pay and keep break-even as the margin.
                 from cs2props.optimizer.search import slip_price_factor
 
+                # s.multiplier ALREADY includes per-side shades — the search
+                # applies slip_price_factor before pricing EV. Multiplying
+                # again here quoted "7.72x (7.085x shaded x1.09)" on a slip
+                # the book pays 7.085x (2026-07-29).
                 shade = slip_price_factor(s.legs)
                 if abs(shade - 1.0) > 1e-9:
-                    price = (f"pays {s.multiplier * shade:.2f}x "
-                             f"({s.multiplier:g}x shaded x{shade:.2f})")
+                    price = (f"pays {s.multiplier:.2f}x "
+                             f"({s.multiplier / shade:g}x ladder, "
+                             f"sides x{shade:.2f})")
                 else:
                     price = f"pays {s.multiplier:g}x"
                 print(f"\n┌─ SLIP #{rank} · {n}-PICK POWER · {price}")
@@ -667,8 +672,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
                     f"--claimed-p {s.p_all:.3f} " + legs_cmd
                 ),
                 rank=rank, n_legs=len(s.legs),
-                # what the book actually pays, per-side shades included
-                multiplier=s.multiplier * slip_price_factor(s.legs),
+                # s.multiplier already carries the per-side shades
+                multiplier=s.multiplier,
                 ev_pct=round(s.ev * 100, 1),
                 ev_adj_pct=round(s.adjusted_ev * 100, 1),
                 p_correlated=s.p_all,
