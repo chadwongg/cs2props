@@ -890,7 +890,12 @@ def main() -> int:
         help="walk only this many days back (overrides --months); what the "
              "dashboard grade button uses",
     )
-    p_bf.add_argument("--tiers", default="s,a,b")
+    # "c" is in the default on purpose: the boards this app actually bets are
+    # overwhelmingly tier-C, and a default of s,a,b meant every quick
+    # backfill — including the dashboard grade button — silently skipped the
+    # one tier that grades the user's slips (found 2026-07-29: 12 finished
+    # tier-C matches invisible to grading while the slips sat pending).
+    p_bf.add_argument("--tiers", default="s,a,b,c")
     p_bf.add_argument("--delay", type=float, default=2.0)
     p_bf.add_argument("--db", default="cs2props.db")
     p_bf.add_argument("--limit", type=int, help="stop after N new matches (smoke)")

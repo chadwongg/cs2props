@@ -179,12 +179,23 @@ class Bo3Client:
             results: list[dict[str, Any]] = page.get("results") or []
             if not results:
                 return
+            n_old = 0
             for m in results:
                 start = m.get("start_date")
                 if start and parse_iso(start) < since:
-                    return
+                    # Do NOT return here. The feed's -start_date sort is not
+                    # strict: matches that flip to "finished" late get slotted
+                    # out of order, so a single stale row mid-page used to end
+                    # the whole walk — a 3-day backfill terminated after 44
+                    # matches while 64 were actually newer than the cutoff
+                    # (2026-07-29), leaving finished slips ungradeable. Skip
+                    # the row; stop only when an ENTIRE page is old.
+                    n_old += 1
+                    continue
                 if (m.get("tier") or "").lower() in tiers:
                     yield m
+            if n_old == len(results):
+                return
             offset += PAGE_SIZE
 
     def fetch_games(self, match_id: int | str) -> list[dict[str, Any]]:

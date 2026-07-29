@@ -85,13 +85,20 @@ def _match(mid: int, date: str, tier: str = "a") -> dict[str, Any]:
     return {"id": mid, "start_date": date, "tier": tier, "status": "finished"}
 
 
-def test_iter_matches_stops_at_cutoff_and_filters_tier() -> None:
+def test_iter_matches_survives_out_of_order_rows() -> None:
+    """The feed's -start_date sort is not strict: matches that flip to
+    "finished" late get slotted out of order. Stopping on the FIRST old row
+    ended a 3-day walk after 44 matches while 64 were newer than the cutoff
+    (2026-07-29) — finished slips sat ungradeable. The walk now skips old
+    rows and stops only when an entire page is old."""
     pages = [
         [_match(1, "2026-07-20T00:00:00+00:00", "a"),
          _match(2, "2026-07-10T00:00:00+00:00", "c")],   # tier-filtered out
-        [_match(3, "2026-06-20T00:00:00+00:00", "s"),
-         _match(4, "2025-01-01T00:00:00+00:00", "a")],   # past cutoff -> stop
-        [_match(5, "2024-12-01T00:00:00+00:00", "a")],   # never fetched
+        [_match(6, "2025-01-01T00:00:00+00:00", "a"),    # stale row mid-walk
+         _match(3, "2026-06-20T00:00:00+00:00", "s")],   # must still be seen
+        [_match(4, "2025-01-01T00:00:00+00:00", "a"),
+         _match(5, "2024-12-01T00:00:00+00:00", "a")],   # whole page old -> stop
+        [_match(7, "2024-11-01T00:00:00+00:00", "a")],   # never fetched
     ]
     calls = {"n": 0}
 
@@ -105,8 +112,8 @@ def test_iter_matches_stops_at_cutoff_and_filters_tier() -> None:
     client = bo3gg.Bo3Client(delay_s=0.0, transport=httpx.MockTransport(handler))
     since = datetime(2026, 6, 1, tzinfo=timezone.utc)
     got = list(client.iter_finished_matches(since, frozenset({"s", "a", "b"})))
-    assert [m["id"] for m in got] == [1, 3]
-    assert calls["n"] == 2  # third page never requested
+    assert [m["id"] for m in got] == [1, 3]  # 3 survives the stale row before it
+    assert calls["n"] == 3  # fourth page never requested
 
 
 def test_transport_error_retries_then_succeeds() -> None:
