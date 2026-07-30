@@ -319,11 +319,15 @@ def _record_table(data: ReportData) -> str:
             if b.claimed is not None and b.actual is not None else "&mdash;"
         )
         pnl = f"{b.pnl:+.2f}" if b.settled else "&mdash;"
+        tier_note = (
+            f' <span class="sz">hit {html.escape(b.tiers)}</span>'
+            if getattr(b, "tiers", "") else ""
+        )
         rows += (
             f'<tr><td class="bk">{html.escape(b.book)} '
             f'<span class="sz">{html.escape(b.sizes)}</span></td>'
             f'<td>{b.n_open}</td>'
-            f'<td>{b.won}W/{b.lost}L</td>'
+            f'<td>{b.won}W/{b.lost}L{tier_note}</td>'
             f'<td class="{pnl_cls}">{pnl}</td>'
             f'<td class="muted-note">{acc}</td></tr>'
         )

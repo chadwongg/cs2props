@@ -511,6 +511,11 @@ class BookStat:
     staked: float
     returned: float
     claimed: float | None   # mean claimed P(win) over settled slips
+    # Settled FLEX slips by "wins of live legs" — e.g. "3/5 ×2 · 2/3 ×1".
+    # W/L alone hides flex economics: a 3-of-5 returning $0.40 and a 1-of-5
+    # wipeout are both "L", and the tier distribution is exactly what the
+    # flex pricing predicts, so showing it is a calibration readout.
+    tiers: str = ""
 
     @property
     def settled(self) -> int:
@@ -567,9 +572,24 @@ def summary_rows(
             " status!='pending' AND claimed_p IS NOT NULL"
             " AND placed_at >= ?", (book, since)
         ).fetchone()[0]
+        tier_counts: dict[str, int] = {}
+        for (sid,) in conn.execute(
+            "SELECT slip_id FROM slips WHERE book=? AND status!='pending'"
+            " AND product='flex' AND placed_at >= ?", (book, since)
+        ).fetchall():
+            st = [r[0] for r in conn.execute(
+                "SELECT status FROM slip_legs WHERE slip_id=?", (sid,))]
+            live = sum(1 for x in st if x in ("won", "lost"))
+            wins = st.count("won")
+            key = f"{wins}/{live}"
+            tier_counts[key] = tier_counts.get(key, 0) + 1
+        tiers = " · ".join(
+            f"{k} ×{n}" for k, n in sorted(tier_counts.items(), reverse=True)
+        )
         out.append(BookStat(
             book=book,
             sizes=sizes_label,
+            tiers=tiers,
             n_open=by.get("pending", (0, 0, 0, 0))[1],
             won=by.get("won", (0, 0, 0, 0))[1],
             lost=by.get("lost", (0, 0, 0, 0))[1],
