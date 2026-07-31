@@ -630,7 +630,8 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
     out: list[Any] = []
     rows = conn.execute(
         "SELECT slip_id, book, n_legs, stake, multiplier, claimed_p, status,"
-        " payout FROM slips ORDER BY placed_at DESC LIMIT ?", (limit,)
+        " payout, placed_at FROM slips ORDER BY placed_at DESC LIMIT ?",
+        (limit,)
     ).fetchall()
     # CLV per leg: closing-line value is the fastest signal that the model
     # actually beats the market, so surface it next to each placed leg.
@@ -640,7 +641,7 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
     for r in leg_clvs(conn):
         clv_by_slip.setdefault(r.slip_id, []).append(r)
 
-    for sid, book, n_legs, stake, mult, cp, status, payout in rows:
+    for sid, book, n_legs, stake, mult, cp, status, payout, placed_at in rows:
         clv_rows = {
             (clean_name(c.player), c.side.lower()): c
             for c in clv_by_slip.get(sid, [])
@@ -661,6 +662,7 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
         have = [l.clv for l in legs if l.clv is not None]
         slip_clv = sum(have) / len(have) if have else None
         out.append(TrackedSlip(
+            placed_at=float(placed_at or 0),
             slip_id=sid, book=book, n_legs=int(n_legs), stake=float(stake),
             multiplier=float(mult) if mult else None,
             claimed_p=float(cp) if cp else None, status=status,

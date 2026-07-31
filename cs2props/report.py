@@ -84,6 +84,7 @@ class TrackedSlip:
     payout: float | None
     legs: tuple[TrackedLeg, ...]
     clv: float | None = None  # mean CLV across this slip's legs
+    placed_at: float = 0.0  # epoch; gates the stale-leg manual controls
 
 
 @dataclass(frozen=True)
@@ -266,6 +267,16 @@ def _book_section(b: BookView) -> str:
 def _tracked_card(t: TrackedSlip) -> str:
     cls = {"won": "won", "lost": "lost"}.get(t.status, "open")
     legs = ""
+    import time as _time
+
+    # Manual grading returns, but only where it is actually needed: a leg
+    # still pending 12+ hours after placement is almost certainly stuck on
+    # the one gap code cannot close — bo3.gg never publishes some tier-C
+    # and regional events, and a did-not-play void produces no data at all.
+    # Fresh slips stay clean; the controls appear exactly when auto-grading
+    # has demonstrably failed to.
+    stale = (t.status == "pending" and t.placed_at
+             and _time.time() - t.placed_at > 12 * 3600)
     for l in t.legs:
         mark = {"won": "✓", "lost": "✗", "void": "∅"}.get(l.status, "·")
         got = f" → {l.observed:g}" if l.observed is not None else ""
@@ -275,11 +286,23 @@ def _tracked_card(t: TrackedSlip) -> str:
             c = "good" if l.clv > 0 else "bad" if l.clv < 0 else "flat"
             clv_html = (f'<span class="clv {c}" title="closed at '
                         f'{l.closing_line:g}">CLV {l.clv:+.1f}</span>')
+        manual = ""
+        if stale and l.status == "pending" and l.slip_id:
+            manual = (
+                f'<span class="mgrade">'
+                f'<input class="obs" type="number" step="0.5" '
+                f'placeholder="actual" title="total from the book\'s app">'
+                f'<button onclick="gradeLeg(this,\'{l.slip_id}\','
+                f'{l.leg_no},false)">save</button>'
+                f'<button onclick="gradeLeg(this,\'{l.slip_id}\','
+                f'{l.leg_no},true)" title="did not play — void">dnp</button>'
+                f'</span>'
+            )
         legs += (
             f'<div class="tleg {l.status}"><span class="tmark">{mark}</span>'
             f'<span class="side {l.side.lower()}">{l.side.upper()}</span>'
             f'<b>{html.escape(l.player)}</b> {l.line:g} '
-            f'{html.escape(l.stat)}{got}{clv_html}</div>'
+            f'{html.escape(l.stat)}{got}{clv_html}{manual}</div>'
         )
     payout = (f"returned ${t.payout:.2f}" if t.payout is not None else "pending")
     claim = f"claimed {t.claimed_p:.1%}" if t.claimed_p else ""
@@ -475,6 +498,13 @@ color:var(--accent);font-variant-numeric:tabular-nums}}
 .record td.neg{{color:var(--bad)}}
 .legrate{{font-family:var(--mono);font-size:12px;color:var(--muted);
   margin-top:6px}}
+.mgrade{{margin-left:10px;display:inline-flex;gap:4px;align-items:center}}
+.mgrade .obs{{width:58px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--ink);border-radius:6px;padding:2px 6px;font-size:11px}}
+.mgrade button{{font-family:var(--mono);font-size:10px;color:var(--muted);
+  background:transparent;border:1px solid var(--line);border-radius:10px;
+  padding:2px 8px;cursor:pointer}}
+.mgrade button:hover{{color:var(--accent);border-color:var(--accent)}}
 #rescan,#grade{{margin-left:14px;font-family:var(--mono);font-size:11px;
   letter-spacing:.05em;color:var(--accent);background:transparent;
   border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);
@@ -652,6 +682,21 @@ function runJob(btn, endpoint, job) {{
     clearInterval(tick);
     btn.disabled = false;
     btn.textContent = original;
+  }});
+}}
+
+function gradeLeg(btn, slipId, legNo, dnp) {{
+  var row = btn.closest(".tleg");
+  var obs = row.querySelector(".obs").value;
+  if (!dnp && obs === "") {{ row.querySelector(".obs").focus(); return; }}
+  btn.disabled = true;
+  fetch("/api/grade-leg", {{
+    method: "POST", headers: {{"Content-Type": "application/json"}},
+    body: JSON.stringify({{slip_id: slipId, leg_no: legNo,
+                          observed: dnp ? null : parseFloat(obs), dnp: dnp}})
+  }}).then(function (r) {{ return r.json(); }}).then(function (d) {{
+    if (d.ok) {{ location.reload(); }}
+    else {{ btn.disabled = false; btn.textContent = "err"; }}
   }});
 }}
 
