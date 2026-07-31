@@ -32,6 +32,15 @@ because it tells you which book to shop for which market.
 SAMPLE WARNING: the prop archive starts 2026-07-24. Everything here is days
 of overlap. The point of this module is to accumulate the measurement, not
 to act on today's version of it.
+
+PRE-COMMITTED CHECKPOINT (2026-07-30): at 400 settled disagreements, the
+under-at-higher lift over the books-agree control decides this module's
+fate — >= 5pts with z >= 2 wires disagreement into the optimizer's leg
+selection; anything less kills the hypothesis and drops live stakes to
+paper-tracking. Fixed IN ADVANCE because the readings so far trace the
+classic noise-mirage curve (57 settled -> +15.6pt z=1.93; 205 settled ->
++6.9pt z=1.53), and the whole failure mode this guards against is finding
+a friendlier slice after the first one fades. Do not move the goalposts.
 """
 
 from __future__ import annotations
