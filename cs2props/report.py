@@ -70,6 +70,7 @@ class TrackedLeg:
     closing_line: float | None = None
     slip_id: str = ""  # for manual grading of legs auto-grade cannot reach
     leg_no: int = -1
+    context: str = ""  # "vs MOUZ · Jul 31 · 6:00 AM", from the props archive
 
 
 @dataclass(frozen=True)
@@ -302,7 +303,10 @@ def _tracked_card(t: TrackedSlip) -> str:
             f'<div class="tleg {l.status}"><span class="tmark">{mark}</span>'
             f'<span class="side {l.side.lower()}">{l.side.upper()}</span>'
             f'<b>{html.escape(l.player)}</b> {l.line:g} '
-            f'{html.escape(l.stat)}{got}{clv_html}{manual}</div>'
+            f'{html.escape(l.stat)}{got}'
+            + (f' <span class="lctx">{html.escape(l.context)}</span>'
+               if l.context else "")
+            + f'{clv_html}{manual}</div>'
         )
     payout = (f"returned ${t.payout:.2f}" if t.payout is not None else "pending")
     claim = f"claimed {t.claimed_p:.1%}" if t.claimed_p else ""

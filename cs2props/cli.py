@@ -492,16 +492,32 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if pp_props is not None:
         boards.append(("prizepicks", "PrizePicks", pp_props, pp_label))
 
+    def _when(start_time: "str | None") -> str:
+        """Board start time -> short LOCAL stamp ('Jul 31 · 6:00 AM')."""
+        if not start_time:
+            return ""
+        from datetime import datetime
+
+        try:
+            dt = datetime.fromisoformat(
+                str(start_time).replace("Z", "+00:00")
+            ).astimezone()
+            return dt.strftime("%b %d · %-I:%M %p")
+        except (ValueError, TypeError):
+            return ""
+
     def leg_view(l: object) -> LegView:
         from cs2props.optimizer.search import Leg as _L
 
         assert isinstance(l, _L)
         mr = l.prop.map_range or (1, 2)
+        when = _when(l.prop.start_time)
         return LegView(
             side=l.side.upper(), player=l.prop.player_name,
             team=l.prop.team or "?", stat=l.prop.stat_kind,
             maps=f"{mr[0]}-{mr[1]}", line=l.prop.line_score, p_hit=l.p,
-            context=f"vs {l.prop.opponent or '?'}",
+            context=f"vs {l.prop.opponent or '?'}"
+                    + (f" · {when}" if when else ""),
         )
 
     # cross-book index: 65% of shared props carry different lines, and the

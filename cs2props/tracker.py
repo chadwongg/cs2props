@@ -641,6 +641,39 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
     for r in leg_clvs(conn):
         clv_by_slip.setdefault(r.slip_id, []).append(r)
 
+    def _leg_context(player: str, stat: str, line: float,
+                     lo: int, hi: int, placed: float) -> str:
+        """'vs MOUZ · Jul 31 · 6:00 AM', recovered from the props archive.
+
+        slip_legs never stored the opponent or start time; the archive has
+        both for every line the boards ever posted, so the context is
+        recoverable for old slips too — same trick the grader uses to pin a
+        leg to its match.
+        """
+        from datetime import datetime
+
+        best: tuple[float, str, str] | None = None
+        for opp, st in conn.execute(
+            "SELECT opponent, start_time FROM props WHERE player_name=?"
+            " AND stat_kind=? AND map_lo=? AND map_hi=? AND line_score=?"
+            " AND start_time IS NOT NULL GROUP BY opponent, start_time",
+            (player, stat, int(lo), int(hi), float(line)),
+        ).fetchall():
+            ts = _epoch(str(st))
+            if ts is None or ts < placed - 6 * 3600:
+                continue
+            if best is None or ts - placed < best[0]:
+                best = (ts - placed, str(opp or "?"), str(st))
+        if best is None:
+            return ""
+        try:
+            dt = datetime.fromisoformat(
+                best[2].replace("Z", "+00:00")).astimezone()
+            when = dt.strftime("%b %d · %-I:%M %p")
+        except (ValueError, TypeError):
+            when = ""
+        return f"vs {best[1]}" + (f" · {when}" if when else "")
+
     for sid, book, n_legs, stake, mult, cp, status, payout, placed_at in rows:
         clv_rows = {
             (clean_name(c.player), c.side.lower()): c
@@ -648,7 +681,8 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
         }
         legs = []
         for leg_no, r in enumerate(conn.execute(
-            "SELECT side, player_name, line, stat_kind, status, observed"
+            "SELECT side, player_name, line, stat_kind, status, observed,"
+            " map_lo, map_hi"
             " FROM slip_legs WHERE slip_id=? ORDER BY leg_no", (sid,)
         )):
             c = clv_rows.get((clean_name(r[1]), r[0].lower()))
@@ -658,6 +692,9 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
                 clv=c.clv if c else None,
                 closing_line=c.closing_line if c else None,
                 slip_id=sid, leg_no=leg_no,
+                context=_leg_context(r[1], r[3], float(r[2]),
+                                     int(r[6]), int(r[7]),
+                                     float(placed_at or 0)),
             ))
         have = [l.clv for l in legs if l.clv is not None]
         slip_clv = sum(have) / len(have) if have else None
