@@ -171,6 +171,52 @@ def cmd_crossbook(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_structures(args: argparse.Namespace) -> int:
+    """Price every 4-leg slip STRUCTURE at its real multiplier, side by side.
+
+    Pure analysis view: no held-player exclusions, no haircut — it answers
+    "which shape carries the most EV on this board", with line edge and
+    correlation lift reported separately per slip.
+    """
+    from cs2props.config import load_payouts
+    from cs2props.model.state_builder import build_history
+    from cs2props.optimizer.structures import (
+        format_report, search_structures, write_json,
+    )
+    from cs2props.pipeline import simulate_board
+    from cs2props.roster import load_cached
+
+    conn = db.connect(Path(args.db))
+    history = build_history(conn)
+    if args.book == "underdog":
+        from cs2props.ingest.underdog import UnderdogClient
+
+        props = UnderdogClient(
+            cache_dir=Path(args.cache_dir) / "underdog"
+        ).fetch_board()
+    else:
+        props = PrizePicksClient(
+            cache_dir=Path(args.cache_dir) / "prizepicks"
+        ).fetch_board()
+    props = [p for p in props if p.board == "standard"]
+    lo, hi = (int(x) for x in args.maps.split("-"))
+    sims = simulate_board(props, history, n_iters=args.iters,
+                          rosters=load_cached(Path(args.cache_dir)),
+                          conn=conn)
+    slips = search_structures(
+        sims, load_payouts(args.book), conn=conn,
+        stats=frozenset(s.strip() for s in args.stats.split(",")),
+        maps=(lo, hi), min_leg_p=args.min_leg_p,
+        filter_ratio=args.filter_ratio, top=args.top,
+    )
+    print(format_report(slips, args.book))
+    if args.json:
+        write_json(slips, args.book, args.json)
+        print(f"\njson written: {args.json}")
+    conn.close()
+    return 0
+
+
 def cmd_reallines(args: argparse.Namespace) -> int:
     """Score archived PrizePicks lines whose matches have settled.
 
@@ -928,6 +974,32 @@ def main() -> int:
     p_cal.add_argument("--db", default="cs2props.db")
     p_cal.add_argument("--min-history", type=int, default=20)
     p_cal.set_defaults(func=cmd_calibrate)
+
+    p_st = sub.add_parser(
+        "structures",
+        help="compare 4-leg slip structures (2+2, 3+1, ...) at their REAL "
+             "multipliers, with line edge and correlation lift separated",
+    )
+    p_st.add_argument("--book", choices=("prizepicks", "underdog"),
+                      default="prizepicks")
+    p_st.add_argument("--db", default="cs2props.db")
+    p_st.add_argument("--cache-dir", default=".cache")
+    p_st.add_argument("--iters", type=int, default=50_000)
+    p_st.add_argument("--stats", default="kills",
+                      help="comma-separated stat kinds (default kills)")
+    p_st.add_argument("--maps", default="1-2",
+                      help="map range, e.g. 1-2 (default) or 1-1")
+    p_st.add_argument("--min-leg-p", type=float, default=0.55)
+    p_st.add_argument(
+        "--filter-ratio", type=float, default=1.1,
+        help="drop slips under this multiple of the STRUCTURE's break-even "
+             "(1.1 reproduces 'P>=0.11 at 10x' at every real multiplier)",
+    )
+    p_st.add_argument("--top", type=int, default=10)
+    p_st.add_argument("--json", default=None,
+                      help="also write full results (incl. 4x4 correlation "
+                           "matrices) to this path")
+    p_st.set_defaults(func=cmd_structures)
 
     p_real = sub.add_parser(
         "reallines",

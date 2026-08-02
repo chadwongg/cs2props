@@ -9,7 +9,7 @@
       "all_one_match": 5.0,
       "floor": 4.0
     },
-    "_shapes_note": "OBSERVED multipliers for exact structural shapes, read off the app. These OVERRIDE the fitted pair_penalty, which is an extrapolation: pair_penalty predicts 9.25x for cross2x2 (10 - 2*0.375) while the app shows 8.5x. An observed price beats a fitted one. IMPORTANT, confirmed by the user 2026-07-25 against the app: for a 4-man Power Play in this shape, 8.5x IS the payout. The card also shows a '1st place pays 10X' line, but that belongs to a separate contest prize and does NOT apply to this entry — do not treat 8.5x as a floor with 10x upside, and do not add any tournament premium to EV. 8.5x is the number, full stop.",
+    "_shapes_note": "OBSERVED multipliers for exact structural shapes, read off the app. These OVERRIDE the fitted pair_penalty, which is an extrapolation: pair_penalty predicts 9.25x for cross2x2 (10 - 2*0.375) while the app shows 8.5x. An observed price beats a fitted one. IMPORTANT, confirmed by the user 2026-07-25 against the app: for a 4-man Power Play in this shape, 8.5x IS the payout. The card also shows a '1st place pays 10X' line, but that belongs to a separate contest prize and does NOT apply to this entry \u2014 do not treat 8.5x as a floor with 10x upside, and do not add any tournament premium to EV. 8.5x is the number, full stop.",
     "shapes": [
       {
         "name": "cross2x2",
@@ -30,7 +30,7 @@
         "4": 5.0
       }
     },
-    "_ladder_note": "VERIFIED from the app's own 'Player Pick Lineup standard payout rates' card, 2026-07-26. These are STANDARD rates. The Arena/contest product pays LESS for the same lineup — a 4-pick Power is 10x standard but 8.5x in Arena, and 4-of-4 Flex is 6x standard but 5x in Arena (3-of-4: 1.5x standard, 1.25x Arena). The `correlated` and `shapes` blocks above describe Arena. Two earlier config values were simply wrong: the 3-pick Power was 5.0 (really 6.0) and the 6-pick Power was 25.0 (really 37.5), which made both look far worse than they are.",
+    "_ladder_note": "VERIFIED from the app's own 'Player Pick Lineup standard payout rates' card, 2026-07-26. These are STANDARD rates. The Arena/contest product pays LESS for the same lineup \u2014 a 4-pick Power is 10x standard but 8.5x in Arena, and 4-of-4 Flex is 6x standard but 5x in Arena (3-of-4: 1.5x standard, 1.25x Arena). The `correlated` and `shapes` blocks above describe Arena. Two earlier config values were simply wrong: the 3-pick Power was 5.0 (really 6.0) and the 6-pick Power was 25.0 (really 37.5), which made both look far worse than they are.",
     "power": {
       "2": 3.0,
       "3": 6.0,
@@ -57,6 +57,14 @@
         "5": 2.0,
         "4": 0.4
       }
+    },
+    "_structures_note": "4-pick POWER multiplier by slip STRUCTURE (groups = legs sharing one match). Sources: 1+1+1+1 and 2+1+1 at the full 10x and 3+1 at 6.5x / 4-in-one-match at 5x were read in-app 2026-07-24; 2+2 at 8.0x is EXTRAPOLATED from the cumulative-pair rule measured on 5-pick lineups 2026-07-26 (second same-match pair costs ~20%) and matches the user's Arena 2+2 settlements (7.75x-8.25x) \u2014 confirm in-app before trusting an EV built on it.",
+    "structures_4pick": {
+      "1+1+1+1": 10.0,
+      "2+1+1": 10.0,
+      "2+2": 8.0,
+      "3+1": 6.5,
+      "4": 5.0
     }
   },
   "underdog": {
@@ -107,6 +115,10 @@
         "6": 1.0
       }
     },
-    "_power_note": "VERIFIED from Underdog's own payout page 2026-07-26. Their SMALL slips are the best-priced products across both books: the 2-pick holds 12.5% and the 3-pick 18.75%, against 25%+ everywhere on PrizePicks. Corrections made: 3-pick was 6.0 (really 6.5); the 5-pick flex tier was 12x/2.5x/0.4x (really 10x/2.5x with NO 3-of-5 tier at all \u2014 a 5-pick flex that drops two legs pays zero, which the old config scored as 0.4x). Note the flex ladder only pays 2 losses at 6 picks and up."
+    "_power_note": "VERIFIED from Underdog's own payout page 2026-07-26. Their SMALL slips are the best-priced products across both books: the 2-pick holds 12.5% and the 3-pick 18.75%, against 25%+ everywhere on PrizePicks. Corrections made: 3-pick was 6.0 (really 6.5); the 5-pick flex tier was 12x/2.5x/0.4x (really 10x/2.5x with NO 3-of-5 tier at all \u2014 a 5-pick flex that drops two legs pays zero, which the old config scored as 0.4x). Note the flex ladder only pays 2 losses at 6 picks and up.",
+    "_structures_note": "Underdog shifts the payout on ANY same-match pair (user-observed 2026-07-26) and the shifted magnitudes were never captured, so only the fully diversified structure carries a trusted price. Structures missing here are skipped by the structure search rather than guessed at.",
+    "structures_4pick": {
+      "1+1+1+1": 10.0
+    }
   }
 }

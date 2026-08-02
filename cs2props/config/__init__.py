@@ -7,7 +7,7 @@ The optimizer consumes these; nothing here decides anything by itself.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 _DIR = Path(__file__).parent
@@ -50,6 +50,10 @@ class Payouts:
     # Structures whose real multiplier has been observed in-app. Preferred
     # over pair_penalty wherever one applies.
     shapes: tuple[Shape, ...] = ()
+    # 4-pick power multiplier by slip structure ("2+2", "3+1", ...), for the
+    # structure-comparison search. Only structures with a measured or
+    # explicitly flagged price appear; absent = skip, never guess.
+    structures_4pick: dict[str, float] = field(default_factory=dict)
 
     def shape(self, name: str) -> Shape:
         for s in self.shapes:
@@ -145,6 +149,10 @@ def load_payouts(book: str, path: Path | None = None) -> Payouts:
         },
         pair_penalty={
             str(k): float(v) for k, v in raw.get("pair_penalty", {}).items()
+        },
+        structures_4pick={
+            str(k): float(v)
+            for k, v in raw.get("structures_4pick", {}).items()
         },
         shapes=tuple(
             Shape(
