@@ -25,7 +25,7 @@
     "correlated": {
       "4": {
         "1": 10.0,
-        "2": 10.0,
+        "2": 9.5,
         "3": 6.75,
         "4": 5.0
       }
@@ -58,10 +58,10 @@
         "4": 0.4
       }
     },
-    "_structures_note": "4-pick POWER multiplier by slip STRUCTURE, ALL user-read in-app 2026-08-02 (standard entries): 1+1+1+1 and 2+1+1 pay the full 10x; 2+2 (two teammate pairs, two matches) pays 7.5x \u2014 the earlier 8.0x extrapolation from the 5-pick pair rule was wrong; 3+1 (teammate triple + single) pays 6.75x, correcting the older 6.5x reading; 4-in-one-match (2+2 across both teams) pays 5x. The user reports these as fixed for the format regardless of which players fill it.",
+    "_structures_note": "4-pick POWER multiplier by slip STRUCTURE, ALL user-read in-app 2026-08-02 (standard entries): 1+1+1+1 pays the full 10x; 2+1+1 (one teammate pair + two singles) pays 9.5x \u2014 so on 4-pick entries even the FIRST pair is charged, unlike the 5-pick tests where one pair rode free; 2+2 (two teammate pairs, two matches) pays 7.5x \u2014 the earlier 8.0x extrapolation was wrong; 3+1 (teammate triple + single) pays 6.75x, correcting the older 6.5x reading; 4-in-one-match (2+2 across both teams) pays 5x. The user reports these as fixed for the format regardless of which players fill it.",
     "structures_4pick": {
       "1+1+1+1": 10.0,
-      "2+1+1": 10.0,
+      "2+1+1": 9.5,
       "2+2": 7.5,
       "3+1": 6.75,
       "4": 5.0
