@@ -68,7 +68,7 @@
     }
   },
   "underdog": {
-    "_correlated_note": "INFERRED, NOT VERIFIED \u2014 mirrors the PrizePicks pattern confirmed in-app 2026-07-24, keyed on max legs from a SINGLE MATCH (<=2 free, 3 penalised, 4 penalised hard). Check Underdog's own payout display before trusting these.",
+    "_correlated_note": "4-pick <=2 legs/match VERIFIED 2026-08-02: a 2+1+1 teammate-pair slip showed 10.2x in-app \u2014 base 10x plus what is almost certainly a 1.02 per-pick side multiplier (priced separately by the optimizer; storing 10.2 here would double-count it). So a single pair is billed at BASE on Underdog. The 3- and 4-stack rows remain INFERRED from the PrizePicks pattern and unverified \u2014 they are unreachable anyway under max_same_match=2.",
     "correlated": {
       "4": {
         "1": 10.0,
@@ -116,9 +116,10 @@
       }
     },
     "_power_note": "VERIFIED from Underdog's own payout page 2026-07-26. Their SMALL slips are the best-priced products across both books: the 2-pick holds 12.5% and the 3-pick 18.75%, against 25%+ everywhere on PrizePicks. Corrections made: 3-pick was 6.0 (really 6.5); the 5-pick flex tier was 12x/2.5x/0.4x (really 10x/2.5x with NO 3-of-5 tier at all \u2014 a 5-pick flex that drops two legs pays zero, which the old config scored as 0.4x). Note the flex ladder only pays 2 losses at 6 picks and up.",
-    "_structures_note": "Underdog shifts the payout on ANY same-match pair (user-observed 2026-07-26) and the shifted magnitudes were never captured, so only the fully diversified structure carries a trusted price. Structures missing here are skipped by the structure search rather than guessed at.",
+    "_structures_note": "2+1+1 VERIFIED 2026-08-02 at 10.2x in-app — stored at the 10x BASE because the extra 0.2 is a per-pick side multiplier the optimizer prices separately. This supersedes the 2026-07-26 any-pair-shifts observation for the 4-pick (that reading came from a 2-man, where the pair IS the whole slip). 2+2, 3+1 and 4-in-one remain uncaptured and are skipped by the structure search rather than guessed at.",
     "structures_4pick": {
-      "1+1+1+1": 10.0
+      "1+1+1+1": 10.0,
+      "2+1+1": 10.0
     }
   }
 }

@@ -87,26 +87,21 @@ def test_underdog_alt_not_combinable() -> None:
 
 
 def test_per_book_default_product_and_size() -> None:
-    """The books get different defaults because their ladders differ.
+    """Both books default to the 4-pick POWER in the AACE structure (one
+    teammate kills pair + two singles from different matches) — user policy,
+    verified in-app 2026-08-02 on each book separately.
 
-    Underdog: 3-pick standard, 6.5x against a fair 8x, second-cheapest rung
-    on either board (its rules forbid same-match pairs, so no structure play
-    exists there).
-    PrizePicks: 4-pick POWER in the AACE structure (one teammate pair + two
-    singles), user policy 2026-08-02. At the in-app structure readings the
-    pair costs 5% (9.5x) but lifts the joint probability +16% — the only
-    structure the book undercharges. Effective multipliers: AACE 11.1 >
-    diversified 10.2 > 2+2 10.0 > 3+1 9.5 > 4-in-one 6.9. Replaces the
-    5-pick flex default from the pre-structure era.
+    The pair lifts joint probability +16%; PrizePicks charges 5% for it
+    (9.5x, effective 11.1) and Underdog charges nothing (10x base, the
+    observed 10.2x being a per-pick side multiplier — effective 11.6, the
+    best-priced product on either board). Every deeper stack is overcharged
+    or unpriced. Replaces the earlier PP 5-flex / UD 3-power defaults.
     """
-    ud = load_restrictions("underdog")
-    assert ud.default_slip_size == 3
-    assert ud.default_product == "power"
-    assert ud.require_teammate_pair is False
-    pp = load_restrictions("prizepicks")
-    assert pp.default_slip_size == 4
-    assert pp.default_product == "power"
-    assert pp.require_teammate_pair is True
+    for book in ("prizepicks", "underdog"):
+        r = load_restrictions(book)
+        assert r.default_slip_size == 4
+        assert r.default_product == "power"
+        assert r.require_teammate_pair is True
 
 
 def test_underdog_has_no_flex_below_three_picks() -> None:
@@ -160,19 +155,17 @@ def test_bet_enabled_defaults_to_true() -> None:
     assert Restrictions(1, "flag", 3, {}).bet_enabled is True
 
 
-def test_underdog_forbids_any_same_match_pair() -> None:
-    """Underdog shades harder than PrizePicks: a same-team pair shifts the
-    payout there, while PrizePicks gives the first same-match pair away free
-    (both measured in-app 2026-07-26). The observed Underdog pair was both
-    same-team AND same-match, so the readings cannot be separated — the
-    conservative rule satisfies either.
-    """
-    ud = load_restrictions("underdog")
-    assert ud.max_multi_leg_matches == 0
-    assert ud.max_same_match == 1
-    pp = load_restrictions("prizepicks")
-    assert pp.max_multi_leg_matches == 1   # first pair is free
-    assert pp.max_same_match == 2
+def test_both_books_allow_exactly_one_pair() -> None:
+    """User-verified 2026-08-02 on BOTH books: a 4-pick 2+1+1 teammate pair
+    is billed at (or above) base — PrizePicks 9.5x, Underdog 10.2x against
+    10x. One match may supply a second leg; more than that is either shaded
+    (PP: 2+2 at 7.5x) or unpriced (UD). This lifted Underdog's earlier
+    total pair ban, which had rested on a 2-MAN observation where the pair
+    was the whole slip."""
+    for book in ("prizepicks", "underdog"):
+        r = load_restrictions(book)
+        assert r.max_multi_leg_matches == 1
+        assert r.max_same_match == 2
 
 def test_kills_only_policy_on_both_books() -> None:
     """USER POLICY 2026-08-02: no headshot legs in live slips. This is a

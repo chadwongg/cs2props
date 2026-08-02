@@ -98,12 +98,15 @@ def test_pairs_are_teammates_and_matches_never_repeat() -> None:
 
 
 def test_unpriced_structures_are_skipped_not_guessed() -> None:
-    """Underdog has a trusted price only for 1+1+1+1 — the concentrated
-    shapes must vanish there, not inherit PrizePicks' numbers."""
+    """Underdog carries trusted prices only for 1+1+1+1 and (since the
+    user's 2026-08-02 in-app 10.2x reading) 2+1+1 — the deeper stacks must
+    vanish there, not inherit PrizePicks' numbers."""
     slips = search_structures(_board(), load_payouts("underdog"),
                               filter_ratio=0.0, top=50)
     assert slips
-    assert {s.structure for s in slips} == {"1+1+1+1"}
+    seen = {s.structure for s in slips}
+    assert seen <= {"1+1+1+1", "2+1+1"}
+    assert not seen & {"2+2", "3+1", "4"}
 
 
 def test_filter_is_per_structure_breakeven_not_flat() -> None:
