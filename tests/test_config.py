@@ -184,3 +184,18 @@ def test_bettable_stats_defaults_to_all() -> None:
     assert Restrictions(1, "flag", 3, {}).bettable_stats == {
         "kills", "headshots"
     }
+
+
+def test_unders_only_policy_on_both_books() -> None:
+    """EVIDENCE-BASED (2026-08-02): over 1,986 settled real kills lines the
+    model's confident OVER picks hit 48.9% vs 55.9% for its UNDER picks —
+    a coin flip sold as a 60% pick. Loosen only if the over-pick rate ever
+    clears its break-even in the growing archive."""
+    assert load_restrictions("prizepicks").bettable_sides == {"under"}
+    assert load_restrictions("underdog").bettable_sides == {"under"}
+
+
+def test_bettable_sides_defaults_to_both() -> None:
+    from cs2props.config import Restrictions
+
+    assert Restrictions(1, "flag", 3, {}).bettable_sides == {"over", "under"}

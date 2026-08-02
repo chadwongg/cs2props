@@ -306,20 +306,26 @@ def evaluate(
 
 
 def collect_legs(
-    sims: list[MatchSim], stats: frozenset[str] | None = None
+    sims: list[MatchSim], stats: frozenset[str] | None = None,
+    sides: frozenset[str] | None = None,
 ) -> list[Leg]:
     """Candidate legs: both sides of every modeled prop clearing MIN_LEG_P,
     best line per player (one leg per player, per restrictions).
 
-    ``stats`` limits which stat kinds may become legs (None = all). The
-    filter sits here, at slip selection, so excluded stats keep informing
-    everything upstream — simulation, crossbook, grading."""
+    ``stats`` limits which stat kinds may become legs; ``sides`` limits
+    which side of the line may (None = all). Both filters sit here, at slip
+    selection, so excluded props keep informing everything upstream —
+    simulation, crossbook, grading. Sides is evidence-driven: the model's
+    confident over picks hit 48.9% on real lines against 55.9% for unders
+    (see restrictions.json)."""
     best_by_player: dict[str, Leg] = {}
     for si, sim in enumerate(sims):
         for pi, (prop, p_over) in enumerate(zip(sim.props, sim.result.p_over)):
             if stats is not None and prop.stat_kind not in stats:
                 continue
             for side, p in (("over", p_over), ("under", 1.0 - p_over)):
+                if sides is not None and side not in sides:
+                    continue
                 if p < MIN_LEG_P:
                     continue
                 # A side the book does not sell is not a bet. Underdog's
@@ -512,7 +518,8 @@ def _flags(legs: list[Leg], restrictions: Restrictions) -> list[str]:
 
 def _build_pool(sims: list[MatchSim], shape: Shape | None = None,
                 size: int | None = None,
-                stats: frozenset[str] | None = None) -> list[Leg]:
+                stats: frozenset[str] | None = None,
+                sides: frozenset[str] | None = None) -> list[Leg]:
     """Strongest candidate legs, capped per match and overall.
 
     When the target shape needs opposing teams inside a match, the per-match
@@ -520,7 +527,7 @@ def _build_pool(sims: list[MatchSim], shape: Shape | None = None,
     would routinely hand back six legs from the stronger team, leaving no
     legal cross-team pair in that match at all.
     """
-    legs = collect_legs(sims, stats)
+    legs = collect_legs(sims, stats, sides)
     by_match: dict[int, list[Leg]] = {}
     for l in legs:
         by_match.setdefault(l.sim_idx, []).append(l)
@@ -805,7 +812,8 @@ def search_slips(
     """
     if product == "flex":
         pool = _build_pool(sims, None, target_size,
-                           restrictions.bettable_stats)
+                           restrictions.bettable_stats,
+                           restrictions.bettable_sides)
         if len(pool) < target_size:
             return [], (
                 f"only {len(pool)} legs clear the {MIN_LEG_P:.0%} bar — "
@@ -820,7 +828,8 @@ def search_slips(
             )
         return diversify(flex, MAX_SLIPS), None
 
-    pool = _build_pool(sims, shape, stats=restrictions.bettable_stats)
+    pool = _build_pool(sims, shape, stats=restrictions.bettable_stats,
+                       sides=restrictions.bettable_sides)
     floor = max(target_size - 1, 2)
     if len(pool) < floor:
         return [], f"only {len(pool)} legs clear the {MIN_LEG_P:.0%} bar"

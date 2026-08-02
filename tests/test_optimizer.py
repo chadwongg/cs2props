@@ -574,3 +574,16 @@ def test_recommended_slips_share_no_props() -> None:
     s3 = slip_of(0, ["p5", "p6"])       # same MATCH as s1
     out = diversify([s1_dup, s2, s3], 5, taken=[s1])
     assert out == [s2]
+
+
+def test_side_filter_drops_over_legs_but_default_keeps_them() -> None:
+    """Unders-only policy: with a sides filter no over leg is ever a
+    candidate, even when the over is the stronger side; without one both
+    sides compete as before."""
+    sim = _sim([0.70, 0.30], ["A", "B"])  # p0 best as OVER, p1 best as UNDER
+    legs = collect_legs([sim], sides=frozenset({"under"}))
+    assert {(l.prop.player_name, l.side) for l in legs} == {("p1", "under")}
+    legs_all = collect_legs([sim])
+    assert {(l.prop.player_name, l.side) for l in legs_all} == {
+        ("p0", "over"), ("p1", "under"),
+    }

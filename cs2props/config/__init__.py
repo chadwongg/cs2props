@@ -138,6 +138,14 @@ class Restrictions:
     # prefers the lower-noise stat. Everything upstream of slip selection
     # (ingest, simulation, crossbook, grading) still handles every stat.
     bettable_stats: frozenset[str] = frozenset({"kills", "headshots"})
+    # Sides allowed in live slips. EVIDENCE-BASED, unlike bettable_stats:
+    # over 1,986 settled real kills lines, the model's confident OVER picks
+    # hit 48.9% (worse than a coin flip; n=568) while its UNDER picks hit
+    # 55.9% (n=861). The book's line embeds information the model lacks and
+    # that asymmetry bites hardest on the side the model is excited about;
+    # CS2's structure (blowouts remove rounds, nothing adds them) piles on.
+    # Over lines still feed simulation, crossbook, and grading.
+    bettable_sides: frozenset[str] = frozenset({"over", "under"})
     # Require every power slip to carry EXACTLY ONE teammate pair (the
     # "2+1+1" / AACE structure): one match supplies two same-team legs,
     # every other match exactly one. This is the only structure where the
@@ -205,6 +213,9 @@ def load_restrictions(book: str, path: Path | None = None) -> Restrictions:
         max_multi_leg_matches=int(raw.get("max_multi_leg_matches", 99)),
         bettable_stats=frozenset(
             str(s) for s in raw.get("bettable_stats", ["kills", "headshots"])
+        ),
+        bettable_sides=frozenset(
+            str(s) for s in raw.get("bettable_sides", ["over", "under"])
         ),
         require_teammate_pair=bool(raw.get("require_teammate_pair", False)),
     )
