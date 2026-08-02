@@ -45,10 +45,14 @@ MIN_SLIP_EV = 0.0  # slips at or below breakeven are refused
 # added variance without adding expectation.
 LEG_OPTIMISM = 0.02  # DEFAULT only — cs2props.adaptive learns this from
                      # graded legs and the CLI passes the learned value in
-MIN_ADJUSTED_EV = 0.10  # required EV AFTER the haircut. Set to 0.10 (not
-                     # 0.20) during the measurement phase: at $1 stakes the
-                     # cost of a marginal bet is trivial, while a day with no
-                     # bets is a day with no data, and CLV needs ~150 legs.
+MIN_ADJUSTED_EV = 0.05  # required EV AFTER the haircut. Lowered 0.10 ->
+                     # 0.05 (user decision 2026-08-02) to break a starvation
+                     # loop: the adaptive haircut sat near its 12% cap, the
+                     # stacked bar surfaced no slips, so no legs graded and
+                     # the haircut had nothing to update on. At $1 stakes a
+                     # marginal bet costs pennies; a day with no bets is a
+                     # day with no data. Restore 0.10 once the haircut
+                     # relaxes back toward its 2-4% prior.
 TOP_LEGS_PER_MATCH = 6  # search-width control
 EXHAUSTIVE_POOL = 24  # C(24,4) = 10,626 combos — exact and fast enough
 # Enumeration is exact but combinatorial: C(24,6) is 134,596 slips, each

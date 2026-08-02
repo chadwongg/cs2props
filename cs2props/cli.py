@@ -818,7 +818,7 @@ def _delta_text(s: "Any") -> str:
 
 
 def search_slips_for(
-    book: str, sims: "list[Any]", min_ev: float = 0.10,
+    book: str, sims: "list[Any]", min_ev: float = 0.05,
     haircut: float = 0.02, shape_name: str | None = None,
     product: str | None = None, size: int | None = None,
 ) -> "tuple[list[Any], str | None]":
@@ -1034,8 +1034,8 @@ def main() -> int:
     p_ev.add_argument("--mult", type=float, required=True,
                       help="multiplier shown in the app, e.g. 8.5")
     p_ev.add_argument("--legs", type=int, default=4)
-    p_ev.add_argument("--min-ev", type=float, default=0.10,
-                      help="the floor the scanner used (default 0.10)")
+    p_ev.add_argument("--min-ev", type=float, default=0.05,
+                      help="the floor the scanner used (default 0.05)")
     p_ev.add_argument("--db", default="cs2props.db")
     p_ev.set_defaults(func=cmd_ev)
 
@@ -1098,9 +1098,10 @@ def main() -> int:
     p_scan.add_argument("--cache-dir", default=".cache")
     p_scan.add_argument("--iters", type=int, default=50_000)
     p_scan.add_argument(
-        "--min-ev", type=float, default=0.10,
-        help="minimum EV AFTER the model's optimism haircut (default 0.20). "
-             "Below ~0.20 the edge does not survive known model error.",
+        "--min-ev", type=float, default=0.05,
+        help="minimum EV AFTER the model's optimism haircut (default 0.05, "
+             "user-lowered from 0.10 while the adaptive haircut sits high — "
+             "the haircut is the primary guard; this is margin on top).",
     )
     p_scan.add_argument(
         "--shape", default=None,
