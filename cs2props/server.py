@@ -112,7 +112,9 @@ class ReportHandler(SimpleHTTPRequestHandler):
         self._json({"ok": True, "state": state})
 
     def _serve_with_live_tracked(self, page: Path) -> None:
-        from cs2props.report import ReportData, _tracked_section
+        from cs2props.report import (
+            ReportData, _tracked_section, build_stat_cards,
+        )
         from cs2props.tracker import summary as tracker_summary
         from cs2props.tracker import summary_rows, tracked_for_report
 
@@ -133,12 +135,13 @@ class ReportHandler(SimpleHTTPRequestHandler):
             # falls back to the old layout and the page looks unchanged no
             # matter how many times the scan is re-run.
             bstats, legrec, legacy = summary_rows(conn)
+            stats = build_stat_cards(conn)
             conn.close()
         fresh = _tracked_section(ReportData(
             generated="", calibration_label="", is_mock=False, books=(),
             tracked=tuple(tracked), tracked_summary=summary,
             book_stats=tuple(bstats), leg_record=legrec,
-            legacy_note=legacy,
+            legacy_note=legacy, stats=stats,
         ))
         body = (html[:i] + fresh + html[j + len(end):]).encode()
         self.send_response(200)

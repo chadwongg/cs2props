@@ -99,6 +99,16 @@ class BookView:
 
 
 @dataclass(frozen=True)
+class StatCard:
+    """One tile in the overview grid: a headline number with provenance."""
+
+    label: str
+    value: str
+    sub: str = ""
+    cls: str = ""  # pos | neg | warn | "" — colours the value
+
+
+@dataclass(frozen=True)
 class ReportData:
     generated: str
     calibration_label: str
@@ -111,6 +121,106 @@ class ReportData:
     book_stats: tuple[Any, ...] = ()
     leg_record: tuple[int, int] = (0, 0)
     legacy_note: str = ""  # pre-epoch record, shown small but never hidden
+    stats: tuple[StatCard, ...] = ()  # overview tiles, see build_stat_cards
+
+
+# Crossbook pairing walks the whole props archive (~0.9s), which is fine at
+# scan time but not on every dashboard reload — the server re-renders the
+# live section per request. Cached with a TTL instead of per-render.
+_CROSSBOOK_CACHE: list[tuple[float, StatCard]] = []
+_CROSSBOOK_TTL_S = 900.0
+
+
+def _crossbook_card(conn: Any) -> StatCard | None:
+    import time
+
+    if _CROSSBOOK_CACHE and time.time() - _CROSSBOOK_CACHE[0][0] < _CROSSBOOK_TTL_S:
+        return _CROSSBOOK_CACHE[0][1]
+    try:
+        from cs2props.crossbook import CHECKPOINT_N, run
+
+        res = run(conn)
+        lift, z = res.lift()
+        card = StatCard(
+            "crossbook", f"{len(res.graded)}/{CHECKPOINT_N}",
+            f"lift {lift:+.1f}pt · z {z:.1f} · {len(res.live)} live",
+            "warn" if len(res.graded) >= CHECKPOINT_N else "",
+        )
+    except Exception:  # a stats tile must never take down the report
+        return None
+    _CROSSBOOK_CACHE[:] = [(time.time(), card)]
+    return card
+
+
+def build_stat_cards(conn: Any) -> tuple[StatCard, ...]:
+    """Overview tiles from live sources: tracker, haircut, calibration,
+    crossbook. Shared by the scan-time renderer and the server's live
+    re-render so the page never silently shows two different vintages."""
+    import json
+    from pathlib import Path
+
+    from cs2props.adaptive import estimate_haircut
+    from cs2props.tracker import summary_rows
+
+    cards: list[StatCard] = []
+    bstats, (leg_w, leg_n), _legacy = summary_rows(conn)
+
+    abbr = {"prizepicks": "PP", "underdog": "UD"}
+
+    pnl = sum(b.pnl for b in bstats)
+    staked = sum(b.staked for b in bstats if b.settled)
+    per_book = " · ".join(
+        f"{abbr.get(b.book, b.book[:2].upper())} {b.pnl:+.2f}"
+        for b in bstats if b.settled
+    ) or "no settled slips yet"
+    cards.append(StatCard(
+        "era P&L", f"${pnl:+.2f}",
+        f"{per_book}" + (f" · ${staked:.0f} staked" if staked else ""),
+        "pos" if pnl > 0 else ("neg" if pnl < 0 else ""),
+    ))
+
+    won = sum(b.won for b in bstats)
+    lost = sum(b.lost for b in bstats)
+    n_open = sum(b.n_open for b in bstats)
+    cards.append(StatCard(
+        "slips", f"{won}W–{lost}L",
+        f"{n_open} open · " + " · ".join(
+            f"{abbr.get(b.book, b.book[:2].upper())} {b.won}W–{b.lost}L"
+            for b in bstats
+        ) if bstats else "none tracked this era",
+    ))
+
+    if leg_n:
+        rate = leg_w / leg_n
+        cards.append(StatCard(
+            "leg hit rate", f"{rate:.1%}", f"{leg_w}/{leg_n} graded legs",
+            "pos" if rate >= 0.55 else ("neg" if rate < 0.50 else ""),
+        ))
+    else:
+        cards.append(StatCard("leg hit rate", "—", "no graded legs yet"))
+
+    hc = estimate_haircut(conn)
+    sub = (f"claimed {hc.claimed_rate:.0%} → hit {hc.observed_rate:.0%}"
+           if hc.claimed_rate is not None and hc.observed_rate is not None
+           else "prior only — learns from graded legs")
+    cards.append(StatCard(
+        "optimism haircut", f"{hc.haircut:.1%}", sub,
+        "warn" if hc.haircut >= 0.08 else "",
+    ))
+
+    cal_path = Path("calibration.json")
+    if cal_path.exists():
+        cal = json.loads(cal_path.read_text())
+        cards.append(StatCard(
+            "model log loss", f"{cal['log_loss']}",
+            f"baseline {cal['baseline']} · {cal['n_series']} series",
+            "pos",
+        ))
+
+    cb = _crossbook_card(conn)
+    if cb is not None:
+        cards.append(cb)
+    return tuple(cards)
 
 
 def _mock_legs() -> dict[str, LegView]:
@@ -158,6 +268,18 @@ def mock_data() -> ReportData:
                      pp_slips, legs),
             BookView("underdog", "Underdog", "681 props · 14 matches",
                      "fetched live", ud_slips, legs),
+        ),
+        stats=(
+            StatCard("era P&L", "$+4.50", "PP +1.00 · UN +3.50 · $22 staked",
+                     "pos"),
+            StatCard("slips", "4W–18L", "3 open · PP 1W–9L · UN 3W–9L"),
+            StatCard("leg hit rate", "48.6%", "36/74 graded legs", "neg"),
+            StatCard("optimism haircut", "9.1%",
+                     "claimed 64% → hit 43%", "warn"),
+            StatCard("model log loss", "0.6365",
+                     "baseline 0.6927 · 45,534 series", "pos"),
+            StatCard("crossbook checkpoint", "304/400",
+                     "lift +0.1pt · z 3.3 · 172 live"),
         ),
     )
 
@@ -254,7 +376,7 @@ def _book_section(b: BookView) -> str:
         if b.legs else ""
     )
     return f"""
-<section class="book {b.book}">
+<section class="book {b.book}" id="board-{b.book}">
   <div class="book-head">
     <span class="book-badge {b.book}">{html.escape(b.display)}</span>
     <span class="book-meta">{html.escape(b.board_label)} ·
@@ -385,8 +507,21 @@ def _tracked_section(data: ReportData) -> str:
     suggestions below it, so each group is a <details>: open bets expanded
     (they still matter), settled history collapsed (it does not).
     """
+    stats = ""
+    if data.stats:
+        tiles = "".join(
+            f'<div class="stat"><div class="stat-label">'
+            f'{html.escape(c.label)}</div>'
+            f'<div class="stat-value {c.cls}">{html.escape(c.value)}</div>'
+            + (f'<div class="stat-sub">{html.escape(c.sub)}</div>'
+               if c.sub else "")
+            + "</div>"
+            for c in data.stats
+        )
+        stats = (f'<section class="overview" id="overview">'
+                 f'<div class="stats">{tiles}</div></section>')
     if not data.tracked:
-        return "<!--TRACKED_START--><!--TRACKED_END-->"
+        return f"<!--TRACKED_START-->{stats}<!--TRACKED_END-->"
     open_ = [t for t in data.tracked if t.status == "pending"]
     done = [t for t in data.tracked if t.status != "pending"]
 
@@ -411,8 +546,8 @@ def _tracked_section(data: ReportData) -> str:
               len(open_) <= 8)
         for bk in books
     )
-    return f"""<!--TRACKED_START-->
-<section class="book tracked-book">
+    return f"""<!--TRACKED_START-->{stats}
+<section class="book tracked-book" id="myslips">
   <div class="book-head">
     <span class="book-badge tracked">My slips</span>
   </div>
@@ -431,6 +566,9 @@ def render(data: ReportData) -> str:
         else ""
     )
     sections = "".join(_book_section(b) for b in data.books)
+    if sections:
+        sections = ('<div class="section-head" id="board">'
+                    "Today's board</div>") + sections
     return f"""<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>cs2props — slip scanner</title>
@@ -456,6 +594,28 @@ h1{{font-size:clamp(22px,4vw,32px);letter-spacing:-.02em;margin:4px 0 2px}}
 border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);
 color:var(--warn);border-radius:10px;padding:10px 14px;margin:18px 0 0;
 font-family:var(--mono);font-size:12px;letter-spacing:.04em}}
+.nav{{display:flex;gap:6px;margin-top:14px;flex-wrap:wrap}}
+.nav a{{font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+text-transform:uppercase;color:var(--muted);text-decoration:none;
+border:1px solid var(--line);border-radius:16px;padding:4px 12px}}
+.nav a:hover{{color:var(--accent);
+border-color:color-mix(in srgb,var(--accent) 40%,transparent)}}
+.section-head{{font-family:var(--mono);font-size:12px;font-weight:800;
+letter-spacing:.18em;text-transform:uppercase;color:var(--faint);
+margin-top:38px;border-bottom:1px solid var(--line);padding-bottom:8px}}
+.overview{{margin-top:22px}}
+.stats{{display:grid;gap:10px;
+grid-template-columns:repeat(auto-fit,minmax(158px,1fr))}}
+.stat{{background:var(--panel);border:1px solid var(--line);
+border-radius:12px;padding:12px 14px;min-width:0}}
+.stat-label{{font-family:var(--mono);font-size:10px;letter-spacing:.13em;
+text-transform:uppercase;color:var(--faint);white-space:nowrap;
+overflow:hidden;text-overflow:ellipsis}}
+.stat-value{{font-family:var(--mono);font-size:21px;font-weight:800;
+margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}}
+.stat-value.pos{{color:var(--good)}} .stat-value.neg{{color:var(--bad)}}
+.stat-value.warn{{color:var(--warn)}}
+.stat-sub{{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}}
 .book{{margin-top:34px}}
 .book-head{{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
 margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:10px}}
@@ -492,6 +652,8 @@ color:var(--accent);font-variant-numeric:tabular-nums}}
 .corr{{font-size:12px;color:var(--muted)}}
 .record{{border-collapse:collapse;margin:6px 0 4px;font-family:var(--mono);
   font-size:12px}}
+@media(max-width:640px){{.record{{display:block;overflow-x:auto;
+  white-space:nowrap}}}}
 .record th{{text-align:left;font-weight:400;color:var(--faint);
   font-size:10px;letter-spacing:.08em;text-transform:uppercase;
   padding:2px 18px 4px 0}}
@@ -615,6 +777,11 @@ requests on purpose)">&#8635; refresh board</button>
 open slip against them — can take a few minutes of polite paging">&#10003;
 grade slips</button></p>
   <p class="cal">model: {html.escape(data.calibration_label)}</p>
+  <nav class="nav">
+    <a href="#overview">overview</a>
+    <a href="#myslips">my slips</a>
+    <a href="#board">today's board</a>
+  </nav>
   {banner}
   {_tracked_section(data)}
   {sections}

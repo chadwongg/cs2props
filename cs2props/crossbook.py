@@ -48,6 +48,10 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
+
+# The pre-committed decision point from the module docstring, importable so
+# the dashboard's checkpoint tile and this module can never drift apart.
+CHECKPOINT_N = 400
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any

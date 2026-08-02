@@ -788,6 +788,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
         tsummary += (f" · CLV {sum(_v) / len(_v):+.2f} over {len(_v)} legs "
                      f"({_beat} beat the close)")
     _bstats, _legrec, _legacy = summary_rows(tconn)
+    from cs2props.report import build_stat_cards
+
+    _stats = build_stat_cards(tconn)
     tconn.close()
 
     data = ReportData(
@@ -796,7 +799,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
         books=tuple(book_views),
         tracked=tuple(tracked), tracked_summary=tsummary,
         book_stats=tuple(_bstats), leg_record=_legrec,
-        legacy_note=_legacy,
+        legacy_note=_legacy, stats=_stats,
     )
     write_report(data, args.out)
     print(f"report written: {args.out}")
