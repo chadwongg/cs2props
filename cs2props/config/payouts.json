@@ -23,6 +23,10 @@
       }
     ],
     "correlated": {
+      "3": {
+        "1": 6.0,
+        "2": 4.75
+      },
       "4": {
         "1": 10.0,
         "2": 9.5,
@@ -30,6 +34,7 @@
         "4": 5.0
       }
     },
+    "_correlated_3_note": "3-pick pair price user-read in-app 2026-08-02: a teammate pair inside a 3-pick drops 6x to 4.75x — a 20.8% cut against a pair worth ~+16%, so the pair is UNDERWATER at 3 picks (effective 4.75*1.16=5.5 < 6). The 4-pick is the only size where the pair is underpriced. Consequence: 3-man slips (including AACE shorter-slip fallbacks and void-shrunk 4-picks) must be fully diversified; the table also makes void settlement price a paired 4-pick that shrinks to 3 legs correctly.",
     "_ladder_note": "VERIFIED from the app's own 'Player Pick Lineup standard payout rates' card, 2026-07-26. These are STANDARD rates. The Arena/contest product pays LESS for the same lineup \u2014 a 4-pick Power is 10x standard but 8.5x in Arena, and 4-of-4 Flex is 6x standard but 5x in Arena (3-of-4: 1.5x standard, 1.25x Arena). The `correlated` and `shapes` blocks above describe Arena. Two earlier config values were simply wrong: the 3-pick Power was 5.0 (really 6.0) and the 6-pick Power was 25.0 (really 37.5), which made both look far worse than they are.",
     "power": {
       "2": 3.0,

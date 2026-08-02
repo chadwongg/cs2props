@@ -584,14 +584,17 @@ def _best_of_size(
             continue
         if shape is not None and not matches_shape(legs, shape):
             continue
-        # AACE policy: power slips must carry exactly one teammate pair —
-        # the only structure the book undercharges (9.5x against a +16%
-        # joint-probability lift). Applies from 3 legs up so the shorter-slip
-        # fallback keeps the pair (2+1) instead of silently dropping it; a
-        # 2-leg slip cannot both be a pair and satisfy min_distinct_teams.
-        if (shape is None and restrictions.require_teammate_pair
-                and size >= 3 and not _has_exactly_one_teammate_pair(legs)):
-            continue
+        # AACE policy — SIZE-DEPENDENT, because the pair price is. At 4
+        # picks the pair is the only structure the books undercharge (PP
+        # 9.5x, UD base) so it is REQUIRED; at 3 picks PrizePicks charges
+        # 20.8% for a pair worth ~+16% (6x -> 4.75x, user-read 2026-08-02)
+        # and Underdog's 3-pick pair price has never been captured — so the
+        # shorter-slip fallback must be fully diversified, never paired.
+        if shape is None and restrictions.require_teammate_pair:
+            if size >= 4 and not _has_exactly_one_teammate_pair(legs):
+                continue
+            if size < 4 and _same_match_count(legs) > 1:
+                continue
         if shape is not None:
             # observed price — no void handling needed beyond the live test,
             # since a voided leg would change the structure the price is for

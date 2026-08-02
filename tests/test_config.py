@@ -199,3 +199,14 @@ def test_bettable_sides_defaults_to_both() -> None:
     from cs2props.config import Restrictions
 
     assert Restrictions(1, "flag", 3, {}).bettable_sides == {"over", "under"}
+
+
+def test_prizepicks_three_pick_pair_is_shaded_below_its_worth() -> None:
+    """User-read in-app 2026-08-02: a teammate pair in a 3-pick pays 4.75x
+    against 6x diversified — a 20.8% cut for a pair worth ~+16%. This is
+    why the AACE pair rule applies ONLY at 4 picks and every 3-man must be
+    diversified."""
+    pp = load_payouts("prizepicks")
+    assert pp.power_multiplier(3, max_same_match=1) == 6.0
+    assert pp.power_multiplier(3, max_same_match=2) == 4.75
+    assert 4.75 * 1.16 < 6.0  # the pair does not pay for itself here

@@ -525,12 +525,20 @@ def test_aace_search_returns_only_one_teammate_pair_slips() -> None:
     slips, reason = search_slips([a, b, c, d], pay, _aace_restr(),
                                  target_size=4, min_adjusted_ev=0.0)
     assert reason is None and slips
-    from cs2props.optimizer.search import _has_exactly_one_teammate_pair
+    from cs2props.optimizer.search import (
+        _has_exactly_one_teammate_pair, _same_match_count,
+    )
 
     for s in slips:
         assert len(s.legs) in (3, 4)
-        assert _has_exactly_one_teammate_pair(s.legs)
-        assert s.multiplier == 9.5 or len(s.legs) == 3
+        if len(s.legs) == 4:
+            # the pair is required — and only priced right — at 4 picks
+            assert _has_exactly_one_teammate_pair(s.legs)
+            assert s.multiplier == 9.5
+        else:
+            # 3-man fallback must be diversified: PP charges 20.8% for a
+            # 3-pick pair worth ~+16% (6x -> 4.75x, user-read 2026-08-02)
+            assert _same_match_count(s.legs) == 1
 
 
 def test_aace_rejects_cross_team_pair_in_same_match() -> None:
