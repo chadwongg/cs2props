@@ -377,6 +377,24 @@ def _has_opposing_pair(legs: list[Leg]) -> bool:
     return False
 
 
+def _has_exactly_one_teammate_pair(legs: list[Leg]) -> bool:
+    """The AACE structure: ONE match supplies exactly two same-team legs,
+    every other match exactly one.
+
+    Both team names must be known — an unknown team cannot be confirmed as
+    a teammate, and the whole point of requiring the pair is the measured
+    teammate correlation; an accidental cross-team pair would pay the same
+    9.5x while delivering the weaker opposing-side correlation."""
+    by_match: dict[int, list[Leg]] = {}
+    for leg in legs:
+        by_match.setdefault(leg.sim_idx, []).append(leg)
+    multi = [g for g in by_match.values() if len(g) > 1]
+    if len(multi) != 1 or len(multi[0]) != 2:
+        return False
+    a, b = multi[0]
+    return a.team is not None and a.team == b.team
+
+
 def matches_shape(legs: list[Leg], shape: Shape) -> bool:
     """Does this combination have exactly the observed structure?
 
@@ -555,6 +573,14 @@ def _best_of_size(
             continue
         if shape is not None and not matches_shape(legs, shape):
             continue
+        # AACE policy: power slips must carry exactly one teammate pair —
+        # the only structure the book undercharges (9.5x against a +16%
+        # joint-probability lift). Applies from 3 legs up so the shorter-slip
+        # fallback keeps the pair (2+1) instead of silently dropping it; a
+        # 2-leg slip cannot both be a pair and satisfy min_distinct_teams.
+        if (shape is None and restrictions.require_teammate_pair
+                and size >= 3 and not _has_exactly_one_teammate_pair(legs)):
+            continue
         if shape is not None:
             # observed price — no void handling needed beyond the live test,
             # since a voided leg would change the structure the price is for
@@ -711,7 +737,8 @@ def _best_flex(
     return out
 
 
-def diversify(slips: list[Slip], limit: int) -> list[Slip]:
+def diversify(slips: list[Slip], limit: int,
+              taken: list[Slip] | None = None) -> list[Slip]:
     """Greedily pick the best slips that don't reuse each other's players.
 
     EV ranking alone surfaces near-duplicates: overlapping slips have almost
@@ -719,13 +746,18 @@ def diversify(slips: list[Slip], limit: int) -> list[Slip]:
     two of those is not two independent shots — the shared legs carry shared
     model error, so they lose together, raise variance, and yield fewer
     effective data points for live calibration.
-    """
+
+    ``taken`` are slips already promised to the caller's output (e.g. the
+    shorter-slip fallback's top pick): candidates clashing with them are
+    excluded too, so the FULL returned list is prop-disjoint. They count
+    against clashes but not the limit and are not returned."""
+    blocking: list[Slip] = list(taken or [])
     chosen: list[Slip] = []
     for slip in slips:
         names = {l.prop.player_name for l in slip.legs}
         matches = {l.sim_idx for l in slip.legs}
         clash = False
-        for c in chosen:
+        for c in blocking + chosen:
             c_names = {l.prop.player_name for l in c.legs}
             c_matches = {l.sim_idx for l in c.legs}
             if len(names & c_names) > MAX_SHARED_PLAYERS:
@@ -829,7 +861,7 @@ def search_slips(
                 f"wanted {target_size} — no legal {target_size}-leg slip "
                 "clears breakeven"
             )
-        return [top, *diversify(full, MAX_SLIPS - 1)], None
+        return [top, *diversify(full, MAX_SLIPS - 1, taken=[top])], None
 
     if not full:
         return [], (

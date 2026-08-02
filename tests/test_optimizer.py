@@ -501,3 +501,76 @@ def test_stat_filter_drops_headshot_legs_but_default_keeps_them() -> None:
     assert {l.prop.player_name for l in legs} == {"p0"}
     legs_all = collect_legs([sim])
     assert {l.prop.player_name for l in legs_all} == {"p0", "p1"}
+
+
+def _aace_restr(**kw: object) -> Restrictions:
+    return Restrictions(
+        max_legs_per_player=1, same_team_action="flag", max_same_team=3,
+        boards_combinable={"standard": True}, min_distinct_teams=2,
+        default_slip_size=4, max_same_match=2, max_multi_leg_matches=1,
+        require_teammate_pair=True, **kw,  # type: ignore[arg-type]
+    )
+
+
+def test_aace_search_returns_only_one_teammate_pair_slips() -> None:
+    """With require_teammate_pair, every returned 4-pick is exactly 2+1+1
+    with the pair on ONE team — never fully diversified, never 2+2."""
+    a = _sim([0.66, 0.65, 0.64], ["A", "A", "B"], rho=0.4, prefix="a")
+    b = _sim([0.66, 0.65], ["C", "C"], rho=0.4, prefix="b")
+    c = _sim([0.64], ["E"], prefix="c")
+    d = _sim([0.63], ["G"], prefix="d")
+    pay = Payouts(power={3: 6.0, 4: 10.0}, flex={},
+                  correlated={4: {1: 10.0, 2: 9.5, 3: 6.75, 4: 5.0}},
+                  pair_penalty={})
+    slips, reason = search_slips([a, b, c, d], pay, _aace_restr(),
+                                 target_size=4, min_adjusted_ev=0.0)
+    assert reason is None and slips
+    from cs2props.optimizer.search import _has_exactly_one_teammate_pair
+
+    for s in slips:
+        assert len(s.legs) in (3, 4)
+        assert _has_exactly_one_teammate_pair(s.legs)
+        assert s.multiplier == 9.5 or len(s.legs) == 3
+
+
+def test_aace_rejects_cross_team_pair_in_same_match() -> None:
+    """A same-match pair split across the two teams pays the same 9.5x but
+    carries the weaker opposing correlation — not the structure we want."""
+    from cs2props.optimizer.search import _has_exactly_one_teammate_pair
+
+    sim = _sim([0.7, 0.7, 0.7, 0.7], ["A", "B", "A", "B"])
+    legs = collect_legs([sim])
+    # manufacture: two legs from this match (teams A and B) + fabricate
+    # two singles from other "matches" by reusing Leg with new sim_idx
+    l1 = [l for l in legs if l.team == "A"][0]
+    l2 = [l for l in legs if l.team == "B"][0]
+    other = _sim([0.7, 0.7], ["C", "E"], prefix="x")
+    singles = collect_legs([other])[:2]
+    singles = [Leg(8 + i, s.prop_idx, s.side, s.p, s.prop, s.team)
+               for i, s in enumerate(singles)]
+    assert not _has_exactly_one_teammate_pair([l1, l2, *singles])
+    mate = [l for l in legs if l.team == "A"][1]
+    assert _has_exactly_one_teammate_pair([l1, mate, *singles])
+
+
+def test_recommended_slips_share_no_props() -> None:
+    """User policy: no duplicate props across the recommended list — every
+    slip is an independent bet. diversify enforces zero shared players and
+    zero shared matches, INCLUDING against a shorter-slip fallback top."""
+    from cs2props.optimizer.search import Slip, diversify
+
+    def slip_of(sim_idx: int, names: list[str]) -> Slip:
+        sim = _sim([0.7] * len(names), ["A"] * len(names), prefix="")
+        legs = []
+        for i, n in enumerate(names):
+            p = _prop(n, "A")
+            legs.append(Leg(sim_idx, i, "over", 0.7, p, "A"))
+        return Slip(legs=legs, p_all=0.2, p_independent=0.2, ev=1.0,
+                    multiplier=9.5)
+
+    s1 = slip_of(0, ["p1", "p2"])
+    s1_dup = slip_of(1, ["p2", "p9"])   # shares p2
+    s2 = slip_of(2, ["p3", "p4"])
+    s3 = slip_of(0, ["p5", "p6"])       # same MATCH as s1
+    out = diversify([s1_dup, s2, s3], 5, taken=[s1])
+    assert out == [s2]

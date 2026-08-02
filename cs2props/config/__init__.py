@@ -138,6 +138,14 @@ class Restrictions:
     # prefers the lower-noise stat. Everything upstream of slip selection
     # (ingest, simulation, crossbook, grading) still handles every stat.
     bettable_stats: frozenset[str] = frozenset({"kills", "headshots"})
+    # Require every power slip to carry EXACTLY ONE teammate pair (the
+    # "2+1+1" / AACE structure): one match supplies two same-team legs,
+    # every other match exactly one. This is the only structure where the
+    # correlation gained exceeds the payout charged — 9.5x for a pair worth
+    # +16% joint probability, where 2+2 (7.5x) and 3+1 (6.75x) both charge
+    # more than their correlation returns. Fully diversified slips are
+    # excluded too: they leave the underpriced pair on the table.
+    require_teammate_pair: bool = False
 
 
 def load_payouts(book: str, path: Path | None = None) -> Payouts:
@@ -198,4 +206,5 @@ def load_restrictions(book: str, path: Path | None = None) -> Restrictions:
         bettable_stats=frozenset(
             str(s) for s in raw.get("bettable_stats", ["kills", "headshots"])
         ),
+        require_teammate_pair=bool(raw.get("require_teammate_pair", False)),
     )

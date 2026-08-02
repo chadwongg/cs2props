@@ -89,22 +89,24 @@ def test_underdog_alt_not_combinable() -> None:
 def test_per_book_default_product_and_size() -> None:
     """The books get different defaults because their ladders differ.
 
-    Underdog: 2-pick standard, 3.5x against a fair 4x — a 12.5% hold, the
-    cheapest rung on either board, and there is no flex tier below 3 picks.
-    PrizePicks: 5-pick FLEX — break-even 54.25%, +9.1% at the measured
-    blind-under rate. The 6-pick edges it on paper (54.21%, +13.5%) but the
-    gap is inside the +/-4.6pt error on that rate and it needs a sixth
-    qualifying leg the board often cannot supply. The 4-pick power this app
-    shipped with is the WORST standard tier on the board (56.23%).
+    Underdog: 3-pick standard, 6.5x against a fair 8x, second-cheapest rung
+    on either board (its rules forbid same-match pairs, so no structure play
+    exists there).
+    PrizePicks: 4-pick POWER in the AACE structure (one teammate pair + two
+    singles), user policy 2026-08-02. At the in-app structure readings the
+    pair costs 5% (9.5x) but lifts the joint probability +16% — the only
+    structure the book undercharges. Effective multipliers: AACE 11.1 >
+    diversified 10.2 > 2+2 10.0 > 3+1 9.5 > 4-in-one 6.9. Replaces the
+    5-pick flex default from the pre-structure era.
     """
     ud = load_restrictions("underdog")
-    # 3-pick standard: 6.5x against a fair 8x, an 18.75% hold and a 53.58%
-    # break-even — second-cheapest rung on either board.
     assert ud.default_slip_size == 3
     assert ud.default_product == "power"
+    assert ud.require_teammate_pair is False
     pp = load_restrictions("prizepicks")
-    assert pp.default_slip_size == 5
-    assert pp.default_product == "flex"
+    assert pp.default_slip_size == 4
+    assert pp.default_product == "power"
+    assert pp.require_teammate_pair is True
 
 
 def test_underdog_has_no_flex_below_three_picks() -> None:
