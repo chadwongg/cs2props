@@ -572,20 +572,27 @@ def summary_rows(
             " status!='pending' AND claimed_p IS NOT NULL"
             " AND placed_at >= ?", (book, since)
         ).fetchone()[0]
-        tier_counts: dict[str, int] = {}
-        for (sid,) in conn.execute(
-            "SELECT slip_id FROM slips WHERE book=? AND status!='pending'"
-            " AND product='flex' AND placed_at >= ?", (book, since)
-        ).fetchall():
-            st = [r[0] for r in conn.execute(
-                "SELECT status FROM slip_legs WHERE slip_id=?", (sid,))]
-            live = sum(1 for x in st if x in ("won", "lost"))
-            wins = st.count("won")
-            key = f"{wins}/{live}"
-            tier_counts[key] = tier_counts.get(key, 0) + 1
-        tiers = " · ".join(
-            f"{k} ×{n}" for k, n in sorted(tier_counts.items(), reverse=True)
-        )
+        # The tier distribution is a calibration readout for FLEX, where
+        # partial hits pay. It only renders while flex is the book's CURRENT
+        # product — next to a "4-man power" label the old flex tiers read as
+        # if today's slips settled partially, which they do not.
+        tiers = ""
+        if "flex" in sizes_label:
+            tier_counts: dict[str, int] = {}
+            for (sid,) in conn.execute(
+                "SELECT slip_id FROM slips WHERE book=? AND status!='pending'"
+                " AND product='flex' AND placed_at >= ?", (book, since)
+            ).fetchall():
+                st = [r[0] for r in conn.execute(
+                    "SELECT status FROM slip_legs WHERE slip_id=?", (sid,))]
+                live = sum(1 for x in st if x in ("won", "lost"))
+                wins = st.count("won")
+                key = f"{wins}/{live}"
+                tier_counts[key] = tier_counts.get(key, 0) + 1
+            tiers = " · ".join(
+                f"{k} ×{n}"
+                for k, n in sorted(tier_counts.items(), reverse=True)
+            )
         out.append(BookStat(
             book=book,
             sizes=sizes_label,
