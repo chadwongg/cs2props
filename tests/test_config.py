@@ -68,7 +68,9 @@ def test_same_match_penalty_verified_in_app() -> None:
     pp = load_payouts("prizepicks")
     assert pp.power_multiplier(4, max_same_match=1) == 10.0
     assert pp.power_multiplier(4, max_same_match=2) == 10.0
-    assert pp.power_multiplier(4, max_same_match=3) == 6.5
+    # 6.75, corrected from a fresh in-app reading 2026-08-02 (the earlier
+    # 6.5 was misread or has moved)
+    assert pp.power_multiplier(4, max_same_match=3) == 6.75
     assert pp.power_multiplier(4, max_same_match=4) == 5.0
 
 

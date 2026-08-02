@@ -26,7 +26,7 @@
       "4": {
         "1": 10.0,
         "2": 10.0,
-        "3": 6.5,
+        "3": 6.75,
         "4": 5.0
       }
     },
@@ -58,12 +58,12 @@
         "4": 0.4
       }
     },
-    "_structures_note": "4-pick POWER multiplier by slip STRUCTURE (groups = legs sharing one match). Sources: 1+1+1+1 and 2+1+1 at the full 10x and 3+1 at 6.5x / 4-in-one-match at 5x were read in-app 2026-07-24; 2+2 at 8.0x is EXTRAPOLATED from the cumulative-pair rule measured on 5-pick lineups 2026-07-26 (second same-match pair costs ~20%) and matches the user's Arena 2+2 settlements (7.75x-8.25x) \u2014 confirm in-app before trusting an EV built on it.",
+    "_structures_note": "4-pick POWER multiplier by slip STRUCTURE, ALL user-read in-app 2026-08-02 (standard entries): 1+1+1+1 and 2+1+1 pay the full 10x; 2+2 (two teammate pairs, two matches) pays 7.5x \u2014 the earlier 8.0x extrapolation from the 5-pick pair rule was wrong; 3+1 (teammate triple + single) pays 6.75x, correcting the older 6.5x reading; 4-in-one-match (2+2 across both teams) pays 5x. The user reports these as fixed for the format regardless of which players fill it.",
     "structures_4pick": {
       "1+1+1+1": 10.0,
       "2+1+1": 10.0,
-      "2+2": 8.0,
-      "3+1": 6.5,
+      "2+2": 7.5,
+      "3+1": 6.75,
       "4": 5.0
     }
   },
