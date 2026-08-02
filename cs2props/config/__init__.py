@@ -133,6 +133,11 @@ class Restrictions:
     # How many matches may supply MORE THAN ONE leg. The payout shift is
     # cumulative in same-match pairs, and only the first pair is free.
     max_multi_leg_matches: int = 99
+    # Stat kinds allowed in live slips. USER POLICY, not a book rule: the
+    # backtest scores headshot picks as well as kills picks, but the user
+    # prefers the lower-noise stat. Everything upstream of slip selection
+    # (ingest, simulation, crossbook, grading) still handles every stat.
+    bettable_stats: frozenset[str] = frozenset({"kills", "headshots"})
 
 
 def load_payouts(book: str, path: Path | None = None) -> Payouts:
@@ -190,4 +195,7 @@ def load_restrictions(book: str, path: Path | None = None) -> Restrictions:
             raw.get("same_match_opposing", {}).get("action", "allow")
         ),
         max_multi_leg_matches=int(raw.get("max_multi_leg_matches", 99)),
+        bettable_stats=frozenset(
+            str(s) for s in raw.get("bettable_stats", ["kills", "headshots"])
+        ),
     )

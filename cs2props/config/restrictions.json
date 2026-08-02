@@ -20,7 +20,9 @@
     "default_product": "flex",
     "bet_enabled": true,
     "max_same_match": 2,
-    "max_multi_leg_matches": 1
+    "max_multi_leg_matches": 1,
+    "_bettable_stats_note": "USER POLICY 2026-08-02: kills only — no headshot legs in live slips. The backtest does NOT support this (headshot picks 54.6% vs kills 51.8% at p>=0.55, n=1018/1271, difference inside error bars); it is a deliberate preference for the lower-noise stat. Headshot props still flow through ingest, simulation, crossbook, and grading — only slip SELECTION is restricted. Revisit if the tracked kills-only record underperforms the backtest.",
+    "bettable_stats": ["kills"]
   },
   "underdog": {
     "max_legs_per_player": 1,
@@ -41,6 +43,7 @@
     "default_product": "power",
     "bet_enabled": true,
     "max_same_match": 1,
-    "max_multi_leg_matches": 0
+    "max_multi_leg_matches": 0,
+    "bettable_stats": ["kills"]
   }
 }

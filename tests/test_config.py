@@ -171,3 +171,21 @@ def test_underdog_forbids_any_same_match_pair() -> None:
     pp = load_restrictions("prizepicks")
     assert pp.max_multi_leg_matches == 1   # first pair is free
     assert pp.max_same_match == 2
+
+def test_kills_only_policy_on_both_books() -> None:
+    """USER POLICY 2026-08-02: no headshot legs in live slips. This is a
+    preference, not an evidence call — the backtest scored headshot picks
+    at 54.6% vs kills 51.8% (p>=0.55) — so if the config ever loosens it,
+    that is a deliberate edit, not a regression."""
+    assert load_restrictions("prizepicks").bettable_stats == {"kills"}
+    assert load_restrictions("underdog").bettable_stats == {"kills"}
+
+
+def test_bettable_stats_defaults_to_all() -> None:
+    """A book with no explicit list may bet every stat — kills-only is
+    opt-in policy, never a silent default."""
+    from cs2props.config import Restrictions
+
+    assert Restrictions(1, "flag", 3, {}).bettable_stats == {
+        "kills", "headshots"
+    }

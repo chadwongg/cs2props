@@ -486,3 +486,18 @@ def test_delta_noise_floor_is_zero_without_iteration_count() -> None:
 
     s = Slip(legs=[], p_all=0.3, p_independent=0.3, ev=0.0, multiplier=6.5)
     assert s.delta_noise_pts == 0.0
+
+
+def test_stat_filter_drops_headshot_legs_but_default_keeps_them() -> None:
+    """The kills-only policy lives at slip selection: with a stats filter,
+    headshot props never become legs; without one, nothing changes. The
+    filter must sit HERE so headshot lines keep feeding the simulation and
+    crossbook upstream."""
+    from dataclasses import replace
+
+    sim = _sim([0.70, 0.70], ["A", "B"])
+    sim.props[1] = replace(sim.props[1], stat_kind="headshots")
+    legs = collect_legs([sim], frozenset({"kills"}))
+    assert {l.prop.player_name for l in legs} == {"p0"}
+    legs_all = collect_legs([sim])
+    assert {l.prop.player_name for l in legs_all} == {"p0", "p1"}
