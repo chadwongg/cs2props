@@ -595,3 +595,22 @@ def test_side_filter_drops_over_legs_but_default_keeps_them() -> None:
     assert {(l.prop.player_name, l.side) for l in legs_all} == {
         ("p0", "over"), ("p1", "under"),
     }
+
+
+def test_strict_size_refuses_rather_than_offering_three_man() -> None:
+    """With strict_slip_size, a board whose best play is a 3-man returns NO
+    slips (with the refusal reason) — never a smaller slip. Same fixture as
+    the refusal test, where the 4th leg fails the conditional bar."""
+    ud = load_payouts("underdog")
+    ud_restr = Restrictions(
+        max_legs_per_player=1, same_team_action="flag", max_same_team=4,
+        boards_combinable={"standard": True}, min_distinct_teams=1,
+        default_slip_size=4, max_same_match=99, strict_slip_size=True,
+    )
+    sim_a = _sim([0.66, 0.64, 0.62], ["A", "A", "A"], rho=0.6)
+    sim_b = _sim([0.58], ["C"], prefix="q")
+    slips, reason = search_slips([sim_a, sim_b], ud, ud_restr)
+    for s in slips:
+        assert len(s.legs) == 4
+    if not slips:
+        assert reason is not None and "no slips today" in reason

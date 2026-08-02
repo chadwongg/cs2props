@@ -30,7 +30,8 @@
     "bettable_sides": [
       "under"
     ],
-    "_sides_note": "UNDERS ONLY (2026-08-02, evidence-based): over 1,986 settled real kills lines the model's confident OVER picks hit 48.9% (n=568) vs 55.9% for its UNDER picks (n=861) — the ~7pt gap holds at the 0.60 conviction level too (52.6% vs 57.6%). Over legs were a coin flip sold as 60% picks. Over lines still feed simulation, crossbook, and grading; revisit if the over-pick rate ever clears its break-even in the growing archive."
+    "_sides_note": "UNDERS ONLY (2026-08-02, evidence-based): over 1,986 settled real kills lines the model's confident OVER picks hit 48.9% (n=568) vs 55.9% for its UNDER picks (n=861) — the ~7pt gap holds at the 0.60 conviction level too (52.6% vs 57.6%). Over legs were a coin flip sold as 60% picks. Over lines still feed simulation, crossbook, and grading; revisit if the over-pick rate ever clears its break-even in the growing archive.",
+    "strict_slip_size": true
   },
   "underdog": {
     "max_legs_per_player": 1,
@@ -59,6 +60,7 @@
     ],
     "bettable_sides": [
       "under"
-    ]
+    ],
+    "strict_slip_size": true
   }
 }

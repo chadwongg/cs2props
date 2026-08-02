@@ -210,3 +210,14 @@ def test_prizepicks_three_pick_pair_is_shaded_below_its_worth() -> None:
     assert pp.power_multiplier(3, max_same_match=1) == 6.0
     assert pp.power_multiplier(3, max_same_match=2) == 4.75
     assert 4.75 * 1.16 < 6.0  # the pair does not pay for itself here
+
+
+def test_strict_slip_size_on_both_books() -> None:
+    """USER POLICY 2026-08-02: strictly 4-man AACE — never a 3-man
+    consolation. The fallback could not carry the pair anyway (4.75x on PP,
+    unpriced on UD), so it was a weaker product wearing the same button."""
+    assert load_restrictions("prizepicks").strict_slip_size is True
+    assert load_restrictions("underdog").strict_slip_size is True
+    from cs2props.config import Restrictions
+
+    assert Restrictions(1, "flag", 3, {}).strict_slip_size is False

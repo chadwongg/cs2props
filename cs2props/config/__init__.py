@@ -146,6 +146,12 @@ class Restrictions:
     # CS2's structure (blowouts remove rounds, nothing adds them) piles on.
     # Over lines still feed simulation, crossbook, and grading.
     bettable_sides: frozenset[str] = frozenset({"over", "under"})
+    # Never offer a slip smaller than the target size (USER POLICY
+    # 2026-08-02): when no legal 4-man clears the bar, the answer is "no
+    # slips today", not a 3-man consolation. The 3-man fallback also can't
+    # carry the AACE pair (overpriced/unpriced at that size), so it was a
+    # different, weaker product wearing the same interface.
+    strict_slip_size: bool = False
     # Require every power slip to carry EXACTLY ONE teammate pair (the
     # "2+1+1" / AACE structure): one match supplies two same-team legs,
     # every other match exactly one. This is the only structure where the
@@ -218,4 +224,5 @@ def load_restrictions(book: str, path: Path | None = None) -> Restrictions:
             str(s) for s in raw.get("bettable_sides", ["over", "under"])
         ),
         require_teammate_pair=bool(raw.get("require_teammate_pair", False)),
+        strict_slip_size=bool(raw.get("strict_slip_size", False)),
     )

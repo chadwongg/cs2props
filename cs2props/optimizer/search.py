@@ -833,7 +833,8 @@ def search_slips(
 
     pool = _build_pool(sims, shape, stats=restrictions.bettable_stats,
                        sides=restrictions.bettable_sides)
-    floor = max(target_size - 1, 2)
+    strict = restrictions.strict_slip_size
+    floor = target_size if strict else max(target_size - 1, 2)
     if len(pool) < floor:
         return [], f"only {len(pool)} legs clear the {MIN_LEG_P:.0%} bar"
 
@@ -854,10 +855,13 @@ def search_slips(
 
     full = _best_of_size(sims, pool, target_size, payouts, restrictions,
                          min_adjusted_ev, haircut)
+    # strict_slip_size: no consolation sizes. The 3-man fallback can't carry
+    # the AACE pair (overpriced at 3 picks on PP, unpriced on UD), so it was
+    # a different product — the honest strict answer is "no slips today".
     shorter = (
         _best_of_size(sims, pool, target_size - 1, payouts, restrictions,
                       min_adjusted_ev, haircut)
-        if target_size - 1 >= 2 else []
+        if target_size - 1 >= 2 and not strict else []
     )
     best_full = full[0].ev if full else float("-inf")
     best_short = shorter[0].ev if shorter else float("-inf")
