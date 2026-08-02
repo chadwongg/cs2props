@@ -32,6 +32,47 @@ _LOCK = threading.Lock()
 # One per name at a time: the PrizePicks rate limiter is per-process, and
 # two backfills would hammer bo3.gg for the same matches.
 _JOBS: dict[str, "subprocess.Popen[bytes]"] = {}
+# when the background top-up last finished a backfill+grade (epoch). The
+# grade button skips its own backfill while this is fresh, which is what
+# makes it feel instant — the 7s of polite bo3.gg paging already happened.
+_LAST_TOPUP = 0.0
+_TOPUP_EVERY_S = 1800.0
+_TOPUP_FRESH_S = 1500.0
+
+
+def _topup_loop(db_path: Path) -> None:
+    """Keep match results warm so grading needs no on-demand download.
+
+    Every 30 minutes: backfill yesterday-and-today's finished matches and
+    grade open slips. Skipped while a button-triggered job is running (the
+    two would page bo3.gg for the same matches and contend for the DB).
+    Failures are logged and retried next cycle — this thread must never die.
+    """
+    import time
+
+    global _LAST_TOPUP
+    exe = str(Path(sys.executable).parent / "cs2props")
+    while True:
+        try:
+            with _LOCK:
+                busy = any(j.poll() is None for j in _JOBS.values())
+            if not busy:
+                subprocess.run(
+                    [exe, "backfill", "--db", str(db_path),
+                     "--days", "1", "--limit", "40"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=600, check=True,
+                )
+                subprocess.run(
+                    [exe, "grade", "--db", str(db_path)],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=300, check=True,
+                )
+                _LAST_TOPUP = time.time()
+                log.info("background top-up done")
+        except Exception as e:  # noqa: BLE001 — heartbeat thread
+            log.warning("background top-up failed (will retry): %s", e)
+        time.sleep(_TOPUP_EVERY_S)
 
 
 def slip_signature(legs: list[LegSpec]) -> frozenset[tuple[str, str, float, str]]:
@@ -181,8 +222,15 @@ class ReportHandler(SimpleHTTPRequestHandler):
         if self.path == "/api/grade":
             # Results first, then grading: legs grade against ingested
             # matches, so grading alone right after games end would just
-            # report "still pending" and look broken. The two-step is what
-            # the manual routine always was.
+            # report "still pending" and look broken. BUT the background
+            # top-up runs that backfill every 30 minutes — while its data is
+            # fresh, grading alone is both correct and sub-second, which is
+            # what makes this button feel instant.
+            import time
+
+            if time.time() - _LAST_TOPUP < _TOPUP_FRESH_S:
+                self._start_job("grade", ["grade", "--db", str(self.db_path)])
+                return
             exe = str(Path(sys.executable).parent / "cs2props")
             cmd = (f"{exe} backfill --db {self.db_path} --days 3 "
                    f"--limit 60 && {exe} grade --db {self.db_path}")
@@ -265,6 +313,10 @@ def serve(directory: Path, db_path: Path, port: int = 8742) -> None:
     ReportHandler.db_path = db_path
     handler = partial(ReportHandler, directory=str(directory))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    threading.Thread(
+        target=_topup_loop, args=(db_path,), daemon=True,
+        name="cs2props-topup",
+    ).start()
     print(f"cs2props dashboard: http://127.0.0.1:{port}/cs2report.html")
     print("  one-click tracking is live — Ctrl-C to stop")
     server.serve_forever()

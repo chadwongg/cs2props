@@ -769,13 +769,12 @@ border-top:1px solid var(--line);padding-top:14px;line-height:1.6}}
   <h1>Slip Scanner</h1>
   <p class="sub">generated {data.generated}
     <button id="rescan" onclick="runJob(this, '/api/rescan', 'scan')"
-      title="fetch fresh boards from both books and rebuild the slips —
-takes about 90 seconds (the PrizePicks client waits 60s between its two
-requests on purpose)">&#8635; refresh board</button>
+      title="fetch fresh boards from both books, re-simulate, and rebuild
+the slips — about 10 seconds">&#8635; refresh board</button>
     <button id="grade" onclick="runJob(this, '/api/grade', 'grade')"
-      title="pull the latest finished matches from bo3.gg, then grade every
-open slip against them — can take a few minutes of polite paging">&#10003;
-grade slips</button></p>
+      title="grade every open slip against finished matches — usually
+instant (results are kept warm in the background); at most ~15 seconds
+after a long quiet period">&#10003; grade slips</button></p>
   <p class="cal">model: {html.escape(data.calibration_label)}</p>
   <nav class="nav">
     <a href="#overview">overview</a>
@@ -801,9 +800,9 @@ grade slips</button></p>
 // predicted at all. Revealing them on demand keeps that without making the
 // common case a three-field form.
 // The header buttons start a job server-side and poll until it finishes,
-// then reload. Both jobs are slow on purpose — the scan sleeps 60s between
-// PrizePicks requests, grading pages bo3.gg politely — so the button counts
-// up rather than leaving a dead spinner.
+// then reload. The scan takes ~10s of simulation; grading is usually
+// sub-second because a background thread keeps match results warm. The
+// counter exists for the rare slow path (cold backfill after a restart).
 function runJob(btn, endpoint, job) {{
   var original = btn.textContent;
   btn.disabled = true;
@@ -848,7 +847,7 @@ function runJob(btn, endpoint, job) {{
           }}
         }})
         .catch(function () {{ /* server restarting; keep polling */ }});
-    }}, 3000);
+    }}, 700);
   }}).catch(function () {{
     clearInterval(tick);
     btn.disabled = false;
