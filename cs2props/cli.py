@@ -803,7 +803,40 @@ def cmd_scan(args: argparse.Namespace) -> int:
     )
     write_report(data, args.out)
     print(f"report written: {args.out}")
+    _notify_qualifying_slips(book_views)
     return 0
+
+
+def _notify_qualifying_slips(book_views: "list[Any]") -> None:
+    """macOS notification when a scan finds slips that clear the bar.
+
+    Under strict 4-man AACE a qualifying slip is rare and perishable — it
+    exists only until its first match locks. The scheduled scans run whether
+    or not the dashboard is open, so without a push the rarest event in the
+    system can pass unseen. Best-effort by design: notification failure must
+    never fail a scan (non-mac, no notification permission, headless)."""
+    import subprocess
+    import sys
+
+    slips = [(b.display, s) for b in book_views for s in b.slips]
+    if not slips or sys.platform != "darwin":
+        return
+    book, top = slips[0]
+    body = (f"{book}: {top.n_legs}-pick pays {top.multiplier:g}x, "
+            f"{top.ev_adj_pct:+.0f}% after haircut")
+    if len(slips) > 1:
+        body += f" (+{len(slips) - 1} more)"
+    title = f"cs2props: {len(slips)} slip{'s' if len(slips) > 1 else ''} on the board"
+    try:
+        subprocess.run(
+            ["osascript", "-e",
+             f'display notification "{body}" with title "{title}" '
+             'sound name "Glass"'],
+            timeout=10, check=False,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except Exception:  # noqa: BLE001 — never fail the scan over a toast
+        pass
 
 
 def _delta_text(s: "Any") -> str:

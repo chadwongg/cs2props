@@ -11,6 +11,15 @@ mkdir -p logs
     --months 1 --tiers s,a,b,c --delay 1.5 --db cs2props.db
   # 2. grade any slips whose matches finished
   /Users/chadwong/.local/bin/uv run cs2props grade --db cs2props.db
+  # 2b. WEEKLY recalibration (Sunday morning run only): the archive grows
+  #     daily but calibration.json was frozen at whenever calibrate last
+  #     ran — every EV number downstream leans on it staying honest. The
+  #     real-line backtest is logged alongside as the out-of-sample check.
+  if [ "$(date +%u)" = "7" ] && [ "$(date +%H)" -lt 12 ]; then
+    echo "--- weekly recalibration ---"
+    /Users/chadwong/.local/bin/uv run cs2props calibrate --db cs2props.db
+    /Users/chadwong/.local/bin/uv run cs2props reallines --db cs2props.db
+  fi
   # 3. scan live boards -> terminal log + cs2report.html
   #    (also snapshots both boards, which is what closing lines are built from)
   /Users/chadwong/.local/bin/uv run cs2props scan
