@@ -46,8 +46,11 @@ padding the slip.
    is just how often it hit across 50,000 simulated games.
 3. **Respect the bookmaker.** The model blends its own estimate with the
    book's line, because the line contains information the model can't see
-   (roster news, sharp money). It also discounts every probability by an
-   amount *learned from its own losing bets*.
+   (roster news, sharp money). Then every probability is passed through a
+   *calibration map* learned from thousands of the model's own graded
+   predictions — it answers "when the model says 65%, what actually
+   happens?" and prices the bet with that instead (see "The reckoning"
+   below for why this exists).
 4. **Price the bet at what the book actually pays.** The apps quietly reduce
    payouts for certain slip structures — put four teammates on one slip and
    "10x" silently becomes 5x. Those rules aren't documented anywhere; they
@@ -84,16 +87,71 @@ padding the slip.
   books' lines. Each produced a confident, wrong conclusion. Each is now a
   regression test.
 
+## The reckoning: when the model's confidence turned out to be empty
+
+A month of tracked bets produced the project's most important finding — and
+it's about the model itself.
+
+After ~150 graded bets, the legs the model claimed would hit ~68% of the
+time were hitting **41%**. That could have been bad luck, so the question
+went to the biggest sample available: 5,490 real book lines, archived
+before each match and graded after. Bucketing the model's picks by how
+confident it was gave this:
+
+| model claimed | actually hit |
+|---|---|
+| 55–60% | 51% |
+| 60–65% | 58% |
+| 65–70% | 51% |
+| 70%+ | 58% |
+
+**Flat.** Above the pick threshold, the model's *extra* confidence carried
+no information — a "72% lock" and a "57% lean" were both ~54% picks. And
+the optimizer was built to chase exactly that empty confidence: it selected
+the highest claims, priced bets off them, and compounded the error four
+legs at a time.
+
+The fix was to stop trusting the model about itself:
+
+1. **A fitted calibration map replaced the flat discount.** Instead of
+   "subtract a few points from every claim," each probability is remapped
+   to what claims like it *actually hit* in the archive (65% → 54%,
+   79% → 57%). It refits weekly, only ever discounts (a slice of the
+   sample that overperformed never earns a boost — that's how bankrolls
+   die), and every expected-value number now flows through it.
+2. **Matches with substitute players became no-bet.** Live results ran
+   well below the backtest during a stretch where most matches fielded
+   stand-ins. The model shaded its projections for them, but shading isn't
+   knowledge — the book reprices on roster news the model can't see, so
+   those matches are now excluded from betting entirely (they're still
+   simulated and archived).
+3. **A pre-committed hypothesis was executed, not renegotiated.** A side
+   experiment bet that when the two books disagreed on a line, the pricier
+   line was wrong. The kill criteria were written down *in advance* — at
+   400 settled cases, a lift under 5 points means the idea dies. The lift
+   went +15.6 → +6.9 → **+0.0** as the sample grew from 57 to 1,037: a
+   textbook noise mirage. It died on schedule, per the rule, with no
+   searching for a friendlier slice of the data.
+
+The uncomfortable consequence, stated plainly: with honest probabilities,
+most bets that used to look great price out at roughly breakeven, and the
+scanner now says "no slips today" far more often. That's not the tool
+breaking — that's the tool finally telling the truth. The interesting
+question it's now equipped to answer is whether any real edge survives
+honest pricing.
+
 ## Where it stands
 
-The live record is small and not yet profitable. After fixing the bugs above
-and switching to the right bet types, the tracking was restarted clean — it
-needs a few hundred graded bets before the hit rate means anything. The
-interesting part of this repo is the instrument, not the balance.
+The live record is small and not profitable — the dashboard says so out
+loud, and the section above explains why. What this repo demonstrates is
+the instrument: a system that archives its predictions before the outcome,
+grades itself against reality, catches its own overconfidence with data,
+and executes pre-committed decisions even when they kill a favorite
+hypothesis. The balance is a result; the discipline is the product.
 
 ## Tech
 
-Python 3.11+ · fully type-hinted (`mypy` clean) · 250 tests · SQLite ·
+Python 3.11+ · fully type-hinted (`mypy` clean) · 263 tests · SQLite ·
 Monte Carlo simulation · walk-forward backtesting · a stdlib-only web
 dashboard · `uv` for everything.
 
