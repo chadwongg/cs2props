@@ -41,6 +41,14 @@ paper-tracking. Fixed IN ADVANCE because the readings so far trace the
 classic noise-mirage curve (57 settled -> +15.6pt z=1.93; 205 settled ->
 +6.9pt z=1.53), and the whole failure mode this guards against is finding
 a friendlier slice after the first one fades. Do not move the goalposts.
+
+VERDICT (2026-08-27, applied as pre-committed): at 1,037 settled
+disagreements the lift is +0.0pt — nowhere near the >=5pt bar. The
+hypothesis is DEAD: line disagreement between these books carries no
+directional edge. The curve completed exactly the noise-mirage arc the
+checkpoint was written to catch (+15.6 -> +6.9 -> +0.0). This module
+stays as a MONITORING tool only — line shopping still uses the gaps for
+price, never for direction — and nothing here may feed leg selection.
 """
 
 from __future__ import annotations

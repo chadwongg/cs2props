@@ -221,3 +221,14 @@ def test_strict_slip_size_on_both_books() -> None:
     from cs2props.config import Restrictions
 
     assert Restrictions(1, "flag", 3, {}).strict_slip_size is False
+
+
+def test_standin_matches_not_bettable_on_either_book() -> None:
+    """Live legs ran ~14pt below the backtest through August's stand-in-
+    heavy tier-C slate — shading was not enough. A book with no flag stays
+    bettable (opt-in exclusion, never a silent default)."""
+    assert load_restrictions("prizepicks").bet_standin_matches is False
+    assert load_restrictions("underdog").bet_standin_matches is False
+    from cs2props.config import Restrictions
+
+    assert Restrictions(1, "flag", 3, {}).bet_standin_matches is True

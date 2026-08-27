@@ -19,6 +19,7 @@ mkdir -p logs
     echo "--- weekly recalibration ---"
     /Users/chadwong/.local/bin/uv run cs2props calibrate --db cs2props.db
     /Users/chadwong/.local/bin/uv run cs2props reallines --db cs2props.db
+    /Users/chadwong/.local/bin/uv run cs2props calmap --db cs2props.db
   fi
   # 3. scan live boards -> terminal log + cs2report.html
   #    (also snapshots both boards, which is what closing lines are built from)

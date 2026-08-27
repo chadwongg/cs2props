@@ -614,3 +614,15 @@ def test_strict_size_refuses_rather_than_offering_three_man() -> None:
         assert len(s.legs) == 4
     if not slips:
         assert reason is not None and "no slips today" in reason
+
+
+def test_standin_matches_yield_no_legs_when_excluded() -> None:
+    """A sim with a detected stand-in contributes zero candidate legs under
+    the exclusion; without it, business as usual."""
+    clean = _sim([0.70], ["A"])
+    tainted = _sim([0.70], ["C"], prefix="q")
+    tainted.standins.append("C: STAND-IN somebody")
+    legs = collect_legs([clean, tainted], skip_standins=True)
+    assert {l.prop.player_name for l in legs} == {"p0"}
+    legs_all = collect_legs([clean, tainted])
+    assert {l.prop.player_name for l in legs_all} == {"p0", "q0"}

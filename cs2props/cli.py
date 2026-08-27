@@ -157,6 +157,27 @@ def cmd_backfill(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_calmap(args: argparse.Namespace) -> int:
+    """Fit the probability calibration map from the real-line archive.
+
+    Run weekly (Sunday automation) alongside `calibrate`. The scan loads
+    the persisted map and prices every leg at f(p) instead of a flat
+    haircut — see cs2props.calmap for why the flat version failed.
+    """
+    from cs2props.calmap import fit, save
+
+    conn = db.connect(Path(args.db))
+    cm = fit(conn)
+    if cm is None:
+        log.error("archive too thin to fit a calibration map")
+        return 1
+    save(cm)
+    print(cm.describe())
+    for raw, cal in cm.knots:
+        print(f"  raw {raw:.1%} -> {cal:.1%}  (discount {raw - cal:+.1%})")
+    return 0
+
+
 def cmd_crossbook(args: argparse.Namespace) -> int:
     """Track where the two books disagree, and whether the gap pays.
 
@@ -572,10 +593,21 @@ def cmd_scan(args: argparse.Namespace) -> int:
     from cs2props.lineshop import build_index, prop_key
     shop_index = build_index({b[0]: b[2] for b in boards})
 
+    from cs2props.calmap import load as load_calmap
+
+    cmap = load_calmap()
     book_views: list[BookView] = []
     print(f"\ncs2props scan — model: {cal_label}")
-    print(f"  leg haircut {hc.haircut:.1%} ({hc.source}) · "
-          f"min EV after haircut {args.min_ev:.0%}\n")
+    if cmap is not None:
+        print(f"  {cmap.describe()}"
+              + (" [STALE — run `cs2props calmap`]" if cmap.stale else "")
+              + f" · min EV after calibration {args.min_ev:.0%}")
+        print(f"  live-vs-claimed diagnostic: haircut {hc.haircut:.1%} "
+              f"({hc.source}) — display only, not priced\n")
+    else:
+        print(f"  leg haircut {hc.haircut:.1%} ({hc.source}) · "
+              f"min EV after haircut {args.min_ev:.0%}"
+              "  [no calibration map — run `cs2props calmap`]\n")
     from cs2props.roster import RosterIndex, fetch_rosters
 
     rosters: RosterIndex | None
@@ -628,7 +660,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         product = getattr(args, "product", None)
         size = getattr(args, "size", None)
         slips, reason = search_slips_for(book, sims, args.min_ev, hc.haircut,
-                                         shape_name, product, size)
+                                         shape_name, product, size,
+                                         calmap=cmap)
         n_props = sum(len(s.props) for s in sims)
         print(f"=== {display}: {len(props)} props, {len(sims)} matches "
               f"simulated, {n_props} legs modeled ({freshness})")
@@ -857,6 +890,7 @@ def search_slips_for(
     book: str, sims: "list[Any]", min_ev: float = 0.05,
     haircut: float = 0.02, shape_name: str | None = None,
     product: str | None = None, size: int | None = None,
+    calmap: "Any | None" = None,
 ) -> "tuple[list[Any], str | None]":
     from cs2props.config import load_payouts, load_restrictions
     from cs2props.optimizer.search import search_slips
@@ -887,7 +921,8 @@ def search_slips_for(
     return search_slips(sims, payouts, restr,
                         target_size=size or restr.default_slip_size,
                         min_adjusted_ev=min_ev, haircut=haircut, shape=shape,
-                        product=product or restr.default_product)
+                        product=product or restr.default_product,
+                        calmap=calmap)
 
 
 def _sim_legs(sim: "Any") -> "list[Any]":
@@ -1036,6 +1071,14 @@ def main() -> int:
                       help="also write full results (incl. 4x4 correlation "
                            "matrices) to this path")
     p_st.set_defaults(func=cmd_structures)
+
+    p_cm = sub.add_parser(
+        "calmap",
+        help="fit the probability calibration map from the real-line "
+             "archive (weekly; the scan prices legs with it)",
+    )
+    p_cm.add_argument("--db", default="cs2props.db")
+    p_cm.set_defaults(func=cmd_calmap)
 
     p_real = sub.add_parser(
         "reallines",

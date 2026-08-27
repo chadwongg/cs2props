@@ -141,11 +141,21 @@ def _crossbook_card(conn: Any) -> StatCard | None:
 
         res = run(conn)
         lift, z = res.lift()
-        card = StatCard(
-            "crossbook", f"{len(res.graded)}/{CHECKPOINT_N}",
-            f"lift {lift:+.1f}pt · z {z:.1f} · {len(res.live)} live",
-            "warn" if len(res.graded) >= CHECKPOINT_N else "",
-        )
+        if len(res.graded) >= CHECKPOINT_N and lift < 5.0:
+            # pre-committed verdict, applied 2026-08-27: the noise-mirage
+            # arc completed (+15.6 -> +6.9 -> +0.0) — monitoring only.
+            card = StatCard(
+                "crossbook", "DEAD",
+                f"lift {lift:+.1f}pt at n={len(res.graded)} — "
+                "pre-committed kill; price shopping only",
+                "neg",
+            )
+        else:
+            card = StatCard(
+                "crossbook", f"{len(res.graded)}/{CHECKPOINT_N}",
+                f"lift {lift:+.1f}pt · z {z:.1f} · {len(res.live)} live",
+                "warn" if len(res.graded) >= CHECKPOINT_N else "",
+            )
     except Exception:  # a stats tile must never take down the report
         return None
     _CROSSBOOK_CACHE[:] = [(time.time(), card)]

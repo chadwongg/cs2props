@@ -146,6 +146,13 @@ class Restrictions:
     # CS2's structure (blowouts remove rounds, nothing adds them) piles on.
     # Over lines still feed simulation, crossbook, and grading.
     bettable_sides: frozenset[str] = frozenset({"over", "under"})
+    # Refuse to bet matches with a detected STAND-IN in either lineup.
+    # Live legs since 2026-08-02 ran ~14pt below the backtest's rate for the
+    # same class of pick, and the August tier-C slate (7 of 11 matches with
+    # flagged subs on some boards) is the prime suspect: the model shades
+    # stand-in matches but still bets them, and they are exactly where the
+    # book knows things the model cannot.
+    bet_standin_matches: bool = True
     # Never offer a slip smaller than the target size (USER POLICY
     # 2026-08-02): when no legal 4-man clears the bar, the answer is "no
     # slips today", not a 3-man consolation. The 3-man fallback also can't
@@ -225,4 +232,5 @@ def load_restrictions(book: str, path: Path | None = None) -> Restrictions:
         ),
         require_teammate_pair=bool(raw.get("require_teammate_pair", False)),
         strict_slip_size=bool(raw.get("strict_slip_size", False)),
+        bet_standin_matches=bool(raw.get("bet_standin_matches", True)),
     )

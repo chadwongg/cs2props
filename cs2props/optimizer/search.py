@@ -25,6 +25,7 @@ import itertools
 import logging
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 
@@ -153,15 +154,30 @@ class Slip:
         return abs(self.delta_pts) > self.delta_noise_pts
 
     haircut: float = LEG_OPTIMISM
+    # Fitted probability calibration (cs2props.calmap.CalibrationMap). When
+    # present it REPLACES the flat haircut in adjusted_ev: each leg is
+    # priced at f(p), the realized hit rate of archive picks that claimed p.
+    # The two are never combined — they model the same error.
+    calmap: "Any | None" = None
+
+    def _leg_effective_p(self, p: float) -> float:
+        if self.calmap is not None:
+            return max(float(self.calmap.apply(p)), 0.01)
+        return max(p - self.haircut, 0.01)
 
     @property
     def adjusted_ev(self) -> float:
-        """EV after shaving LEG_OPTIMISM off every leg.
+        """EV after recalibrating every leg to what its claim really hits.
 
-        Scaling P(all) by the product of (p-haircut)/p per leg is an
-        approximation — the joint is not a product of marginals — but it is
-        the right direction and magnitude, and it is what separates a real
-        edge from one that exists only if the model is exactly right.
+        With a fitted calibration map, each leg's p becomes f(p) from the
+        real-line archive (5,490 settled kills lines showed claims of
+        57-72% all realizing ~54% — a distortion no flat subtraction can
+        express). Without a map, the flat haircut remains the fallback.
+
+        Scaling P(all) by the product of f(p)/p per leg is an approximation
+        — the joint is not a product of marginals — but it is the right
+        direction and magnitude, and it is what separates a real edge from
+        one that exists only if the model is exactly right.
 
         Flex cannot use that shortcut: its payout reads several tiers of the
         hit distribution, and shrinking the top one says nothing about what
@@ -177,7 +193,7 @@ class Slip:
             return self.ev
         shrink = 1.0
         for leg in self.legs:
-            shrink *= max(leg.p - self.haircut, 0.01) / leg.p
+            shrink *= self._leg_effective_p(leg.p) / leg.p
         return self.multiplier * self.p_all * shrink - 1.0
 
     @property
@@ -308,6 +324,7 @@ def evaluate(
 def collect_legs(
     sims: list[MatchSim], stats: frozenset[str] | None = None,
     sides: frozenset[str] | None = None,
+    skip_standins: bool = False,
 ) -> list[Leg]:
     """Candidate legs: both sides of every modeled prop clearing MIN_LEG_P,
     best line per player (one leg per player, per restrictions).
@@ -320,6 +337,12 @@ def collect_legs(
     (see restrictions.json)."""
     best_by_player: dict[str, Leg] = {}
     for si, sim in enumerate(sims):
+        # A stand-in distorts every projection in the match — the states the
+        # model holds assume roster continuity, and the book reprices on
+        # roster news the model cannot see. Shading was not enough: live
+        # legs ran ~14pt under the backtest through a stand-in-heavy slate.
+        if skip_standins and sim.standins:
+            continue
         for pi, (prop, p_over) in enumerate(zip(sim.props, sim.result.p_over)):
             if stats is not None and prop.stat_kind not in stats:
                 continue
@@ -519,7 +542,8 @@ def _flags(legs: list[Leg], restrictions: Restrictions) -> list[str]:
 def _build_pool(sims: list[MatchSim], shape: Shape | None = None,
                 size: int | None = None,
                 stats: frozenset[str] | None = None,
-                sides: frozenset[str] | None = None) -> list[Leg]:
+                sides: frozenset[str] | None = None,
+                skip_standins: bool = False) -> list[Leg]:
     """Strongest candidate legs, capped per match and overall.
 
     When the target shape needs opposing teams inside a match, the per-match
@@ -527,7 +551,7 @@ def _build_pool(sims: list[MatchSim], shape: Shape | None = None,
     would routinely hand back six legs from the stronger team, leaving no
     legal cross-team pair in that match at all.
     """
-    legs = collect_legs(sims, stats, sides)
+    legs = collect_legs(sims, stats, sides, skip_standins)
     by_match: dict[int, list[Leg]] = {}
     for l in legs:
         by_match.setdefault(l.sim_idx, []).append(l)
@@ -558,6 +582,7 @@ def _best_of_size(
     min_adjusted_ev: float = MIN_ADJUSTED_EV,
     haircut: float = LEG_OPTIMISM,
     shape: Shape | None = None,
+    calmap: "Any | None" = None,
 ) -> list[Slip]:
     """Exhaustively score every submittable combination of `size` legs.
 
@@ -626,7 +651,8 @@ def _best_of_size(
         slip = Slip(
             legs=legs, p_all=p_all, p_independent=p_ind, ev=ev,
             multiplier=mult, flags=_flags(legs, restrictions),
-            haircut=haircut, n_iters=int(hit_of[id(legs[0])].shape[0]),
+            haircut=haircut, calmap=calmap,
+            n_iters=int(hit_of[id(legs[0])].shape[0]),
         )
         if slip.adjusted_ev < min_adjusted_ev:
             continue  # edge does not survive the model's known optimism
@@ -660,6 +686,7 @@ def _best_flex(
     restrictions: Restrictions,
     min_adjusted_ev: float = MIN_ADJUSTED_EV,
     haircut: float = LEG_OPTIMISM,
+    calmap: Any | None = None,
     seed: int = 11,
 ) -> list[Slip]:
     """Score flex slips of ``size`` legs over the full hit distribution.
@@ -682,7 +709,8 @@ def _best_flex(
         # hit here would pay the full-size tier on a slip the book shrank
         won = h & live
         hit_of[id(leg)] = won
-        thin_of[id(leg)] = _thin(won, leg.p, haircut, rng)
+        cut = float(calmap.delta(leg.p)) if calmap is not None else haircut
+        thin_of[id(leg)] = _thin(won, leg.p, cut, rng)
         live_of[id(leg)] = live
 
     def _void_aware_ev(
@@ -797,6 +825,7 @@ def search_slips(
     haircut: float = LEG_OPTIMISM,
     shape: Shape | None = None,
     product: str = "power",
+    calmap: "Any | None" = None,
 ) -> tuple[list[Slip], str | None]:
     """-> (ranked slips at ``target_size``, refusal reason if none qualify).
 
@@ -816,14 +845,15 @@ def search_slips(
     if product == "flex":
         pool = _build_pool(sims, None, target_size,
                            restrictions.bettable_stats,
-                           restrictions.bettable_sides)
+                           restrictions.bettable_sides,
+                           not restrictions.bet_standin_matches)
         if len(pool) < target_size:
             return [], (
                 f"only {len(pool)} legs clear the {MIN_LEG_P:.0%} bar — "
                 f"need {target_size} for a {target_size}-pick flex"
             )
         flex = _best_flex(sims, pool, target_size, payouts, restrictions,
-                          min_adjusted_ev, haircut)
+                          min_adjusted_ev, haircut, calmap=calmap)
         if not flex:
             return [], (
                 f"no {target_size}-pick flex clears {min_adjusted_ev:.0%} EV "
@@ -832,7 +862,8 @@ def search_slips(
         return diversify(flex, MAX_SLIPS), None
 
     pool = _build_pool(sims, shape, stats=restrictions.bettable_stats,
-                       sides=restrictions.bettable_sides)
+                       sides=restrictions.bettable_sides,
+                       skip_standins=not restrictions.bet_standin_matches)
     strict = restrictions.strict_slip_size
     floor = target_size if strict else max(target_size - 1, 2)
     if len(pool) < floor:
@@ -843,7 +874,7 @@ def search_slips(
         # break the structure, so the shorter-slip refusal below does not
         # apply — the honest answer when nothing fits is no slips.
         fixed = _best_of_size(sims, pool, shape.n_legs, payouts, restrictions,
-                              min_adjusted_ev, haircut, shape)
+                              min_adjusted_ev, haircut, shape, calmap)
         if not fixed:
             return [], (
                 f"no {shape.name} slip ({shape.n_matches} matches x "
@@ -854,13 +885,13 @@ def search_slips(
         return diversify(fixed, MAX_SLIPS), None
 
     full = _best_of_size(sims, pool, target_size, payouts, restrictions,
-                         min_adjusted_ev, haircut)
+                         min_adjusted_ev, haircut, calmap=calmap)
     # strict_slip_size: no consolation sizes. The 3-man fallback can't carry
     # the AACE pair (overpriced at 3 picks on PP, unpriced on UD), so it was
     # a different product — the honest strict answer is "no slips today".
     shorter = (
         _best_of_size(sims, pool, target_size - 1, payouts, restrictions,
-                      min_adjusted_ev, haircut)
+                      min_adjusted_ev, haircut, calmap=calmap)
         if target_size - 1 >= 2 and not strict else []
     )
     best_full = full[0].ev if full else float("-inf")
