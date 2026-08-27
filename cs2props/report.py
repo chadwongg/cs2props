@@ -124,52 +124,15 @@ class ReportData:
     stats: tuple[StatCard, ...] = ()  # overview tiles, see build_stat_cards
 
 
-# Crossbook pairing walks the whole props archive (~0.9s), which is fine at
-# scan time but not on every dashboard reload — the server re-renders the
-# live section per request. Cached with a TTL instead of per-render.
-_CROSSBOOK_CACHE: list[tuple[float, StatCard]] = []
-_CROSSBOOK_TTL_S = 900.0
-
-
-def _crossbook_card(conn: Any) -> StatCard | None:
-    import time
-
-    if _CROSSBOOK_CACHE and time.time() - _CROSSBOOK_CACHE[0][0] < _CROSSBOOK_TTL_S:
-        return _CROSSBOOK_CACHE[0][1]
-    try:
-        from cs2props.crossbook import CHECKPOINT_N, run
-
-        res = run(conn)
-        lift, z = res.lift()
-        if len(res.graded) >= CHECKPOINT_N and lift < 5.0:
-            # pre-committed verdict, applied 2026-08-27: the noise-mirage
-            # arc completed (+15.6 -> +6.9 -> +0.0) — monitoring only.
-            card = StatCard(
-                "crossbook", "DEAD",
-                f"lift {lift:+.1f}pt at n={len(res.graded)} — "
-                "pre-committed kill; price shopping only",
-                "neg",
-            )
-        else:
-            card = StatCard(
-                "crossbook", f"{len(res.graded)}/{CHECKPOINT_N}",
-                f"lift {lift:+.1f}pt · z {z:.1f} · {len(res.live)} live",
-                "warn" if len(res.graded) >= CHECKPOINT_N else "",
-            )
-    except Exception:  # a stats tile must never take down the report
-        return None
-    _CROSSBOOK_CACHE[:] = [(time.time(), card)]
-    return card
-
-
 def build_stat_cards(conn: Any) -> tuple[StatCard, ...]:
-    """Overview tiles from live sources: tracker, haircut, calibration,
-    crossbook. Shared by the scan-time renderer and the server's live
-    re-render so the page never silently shows two different vintages."""
-    import json
-    from pathlib import Path
+    """Overview tiles: the scoreboard, nothing else.
 
-    from cs2props.adaptive import estimate_haircut
+    Four tiles — P&L, slip record, leg hit rate, and what a model claim is
+    currently worth after calibration. Internal diagnostics (the retired
+    flat haircut, walk-forward log loss, the dead crossbook experiment) were
+    cut 2026-08-27 at the user's request: they informed development
+    decisions, not betting decisions. Shared by the scan-time renderer and
+    the server's live re-render so the page never shows two vintages."""
     from cs2props.tracker import summary_rows
 
     cards: list[StatCard] = []
@@ -203,33 +166,28 @@ def build_stat_cards(conn: Any) -> tuple[StatCard, ...]:
     if leg_n:
         rate = leg_w / leg_n
         cards.append(StatCard(
-            "leg hit rate", f"{rate:.1%}", f"{leg_w}/{leg_n} graded legs",
+            "leg hit rate", f"{rate:.1%}",
+            f"{leg_w}/{leg_n} graded legs \u00b7 ~56% pays",
             "pos" if rate >= 0.55 else ("neg" if rate < 0.50 else ""),
         ))
     else:
         cards.append(StatCard("leg hit rate", "—", "no graded legs yet"))
 
-    hc = estimate_haircut(conn)
-    sub = (f"claimed {hc.claimed_rate:.0%} → hit {hc.observed_rate:.0%}"
-           if hc.claimed_rate is not None and hc.observed_rate is not None
-           else "prior only — learns from graded legs")
-    cards.append(StatCard(
-        "optimism haircut", f"{hc.haircut:.1%}", sub,
-        "warn" if hc.haircut >= 0.08 else "",
-    ))
+    from cs2props.calmap import load as _load_calmap
 
-    cal_path = Path("calibration.json")
-    if cal_path.exists():
-        cal = json.loads(cal_path.read_text())
+    cm = _load_calmap()
+    if cm is not None:
         cards.append(StatCard(
-            "model log loss", f"{cal['log_loss']}",
-            f"baseline {cal['baseline']} · {cal['n_series']} series",
-            "pos",
+            "calibration", f"65% claim \u2192 {cm.apply(0.65):.0%}",
+            f"fitted on {cm.n_lines:,} real lines \u00b7 {cm.when}"
+            + (" \u00b7 STALE" if cm.stale else ""),
+            "warn" if cm.stale else "",
         ))
-
-    cb = _crossbook_card(conn)
-    if cb is not None:
-        cards.append(cb)
+    else:
+        cards.append(StatCard(
+            "calibration", "\u2014", "no map \u2014 run `cs2props calmap`",
+            "warn",
+        ))
     return tuple(cards)
 
 
@@ -280,16 +238,13 @@ def mock_data() -> ReportData:
                      "fetched live", ud_slips, legs),
         ),
         stats=(
-            StatCard("era P&L", "$+4.50", "PP +1.00 · UN +3.50 · $22 staked",
+            StatCard("era P&L", "$+4.50", "PP +1.00 · UD +3.50 · $22 staked",
                      "pos"),
-            StatCard("slips", "4W–18L", "3 open · PP 1W–9L · UN 3W–9L"),
-            StatCard("leg hit rate", "48.6%", "36/74 graded legs", "neg"),
-            StatCard("optimism haircut", "9.1%",
-                     "claimed 64% → hit 43%", "warn"),
-            StatCard("model log loss", "0.6365",
-                     "baseline 0.6927 · 45,534 series", "pos"),
-            StatCard("crossbook checkpoint", "304/400",
-                     "lift +0.1pt · z 3.3 · 172 live"),
+            StatCard("slips", "4W–18L", "3 open · PP 1W–9L · UD 3W–9L"),
+            StatCard("leg hit rate", "48.6%",
+                     "36/74 graded legs · ~56% pays", "neg"),
+            StatCard("calibration", "65% claim → 54%",
+                     "fitted on 5,490 real lines · 2026-08-27"),
         ),
     )
 
