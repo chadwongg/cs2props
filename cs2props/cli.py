@@ -654,6 +654,22 @@ def cmd_scan(args: argparse.Namespace) -> int:
                       f"{len(held_matches)} match(es) you already have open)")
         sims = simulate_board(props, history, n_iters=args.iters,
                               rosters=rosters, conn=conn)
+        # Second lineup source: a match the bo3-history detector flagged is
+        # re-checked against PandaScore's active rosters, and becomes
+        # bettable again ONLY when both full lineups are confirmed. Most of
+        # August's flags were variant-name false positives ("vision" posting
+        # as "ozonevvision"); this recovers those without giving back the
+        # protection on real substitutions. Failure = no confirmations.
+        try:
+            from cs2props.ingest.pandascore import confirm_flagged_sims
+
+            n_ok = confirm_flagged_sims(
+                sims, Path(args.cache_dir) / "pandascore")
+            if n_ok:
+                print(f"    lineups confirmed clean via pandascore: {n_ok} "
+                      "flagged match(es) recovered")
+        except Exception as e:  # noqa: BLE001 — confirmation is optional
+            log.warning("pandascore confirmation unavailable: %s", e)
         from cs2props.optimizer.search import slip_price_factor
 
         shape_name = getattr(args, "shape", None)
