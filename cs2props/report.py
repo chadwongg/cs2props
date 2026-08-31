@@ -368,6 +368,21 @@ def _tracked_card(t: TrackedSlip) -> str:
     for l in t.legs:
         mark = {"won": "✓", "lost": "✗", "void": "∅"}.get(l.status, "·")
         got = f" → {l.observed:g}" if l.observed is not None else ""
+        # A void leg with no observed number looked identical to an
+        # ungraded one. Say WHY it voided: no number = the player did not
+        # play (book refunds the leg); with a number = the total landed
+        # exactly on a whole line (push). Pending legs get their own tag so
+        # "blank" always has a stated reason.
+        tag = ""
+        if l.status == "void":
+            kind = "PUSH" if l.observed is not None else "DNP"
+            title = ("landed exactly on the line — leg refunded"
+                     if l.observed is not None
+                     else "did not play — leg refunded, slip shrinks")
+            tag = f' <span class="vtag" title="{title}">{kind}</span>'
+        elif l.status == "pending" and t.status != "pending":
+            tag = (' <span class="vtag pend" title="no result source yet — '
+                   'grade manually from the app">NOT GRADED</span>')
         if l.clv is None:
             clv_html = ""
         else:
@@ -390,7 +405,7 @@ def _tracked_card(t: TrackedSlip) -> str:
             f'<div class="tleg {l.status}"><span class="tmark">{mark}</span>'
             f'<span class="side {l.side.lower()}">{l.side.upper()}</span>'
             f'<b>{html.escape(l.player)}</b> {l.line:g} '
-            f'{html.escape(l.stat)}{got}'
+            f'{html.escape(l.stat)}{got}{tag}'
             + (f' <span class="lctx">{html.escape(l.context)}</span>'
                if l.context else "")
             + f'{clv_html}{manual}</div>'
@@ -721,6 +736,12 @@ padding:2px 9px;border-radius:20px;background:var(--panel2);color:var(--muted)}}
 .tmark{{font-family:var(--mono);width:14px}}
 .clv{{font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 7px;
 border-radius:20px;margin-left:6px}}
+.vtag{{font-family:var(--mono);font-size:9px;font-weight:800;
+letter-spacing:.08em;padding:1px 7px;border-radius:20px;margin-left:6px;
+background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn);
+border:1px solid color-mix(in srgb,var(--warn) 40%,transparent)}}
+.vtag.pend{{background:var(--panel2);color:var(--faint);
+border-color:var(--line)}}
 .clv.good{{background:color-mix(in srgb,var(--good) 16%,transparent);
 color:var(--good)}}
 .clv.bad{{background:color-mix(in srgb,var(--bad) 16%,transparent);

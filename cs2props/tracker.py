@@ -681,9 +681,18 @@ def tracked_for_report(conn: sqlite3.Connection, limit: int = 20) -> list[Any]:
     from cs2props.report import TrackedLeg, TrackedSlip
 
     out: list[Any] = []
+    # Newest N — plus, ALWAYS, any slip still carrying a pending leg. A
+    # stuck leg that scrolls off the bottom of the list becomes invisible
+    # forever (k9izer's sat unseen from Aug 2 to Aug 30); a leg that needs
+    # manual grading must stay on screen until someone grades it.
     rows = conn.execute(
         "SELECT slip_id, book, n_legs, stake, multiplier, claimed_p, status,"
-        " payout, placed_at FROM slips ORDER BY placed_at DESC LIMIT ?",
+        " payout, placed_at FROM slips"
+        " WHERE slip_id IN (SELECT slip_id FROM slips"
+        "                   ORDER BY placed_at DESC LIMIT ?)"
+        "    OR slip_id IN (SELECT DISTINCT slip_id FROM slip_legs"
+        "                   WHERE status='pending')"
+        " ORDER BY placed_at DESC",
         (limit,)
     ).fetchall()
     # CLV per leg: closing-line value is the fastest signal that the model
