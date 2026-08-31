@@ -134,6 +134,35 @@ def _prop_start_epoch(
     return best
 
 
+def _prop_opponent(
+    conn: sqlite3.Connection, player: str, stat: str, line: float,
+    lo: int, hi: int, placed_at: float,
+) -> str | None:
+    """The opponent the prop named, from the board archive (None = unknown)."""
+    row = conn.execute(
+        "SELECT opponent FROM props WHERE player_name = ? AND stat_kind = ?"
+        " AND map_lo = ? AND map_hi = ? AND line_score = ?"
+        " AND opponent IS NOT NULL AND scanned_at <= ? + 3600"
+        " ORDER BY scanned_at DESC LIMIT 1",
+        (player, stat, int(lo), int(hi), float(line), placed_at),
+    ).fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+def _team_matches(board: str, hist: str) -> bool:
+    """Does a board team label ("RA", "EXR") plausibly name a bo3.gg clan
+    ("Rare Atom", "ex-RUSTEC")? Board labels are abbreviations, so accept
+    cleaned equality, a prefix either way, or word-initials."""
+    a = "".join(c for c in board.lower() if c.isalnum())
+    b = "".join(c for c in hist.lower() if c.isalnum())
+    if not a or not b:
+        return False
+    if a == b or a.startswith(b) or b.startswith(a):
+        return True
+    initials = "".join(w[0] for w in hist.lower().split() if w and w[0].isalnum())
+    return a == initials
+
+
 def _grade_leg(
     conn: sqlite3.Connection, placed_at: float, leg: "tuple[Any, ...]"
 ) -> tuple[str, float | None]:
@@ -159,7 +188,8 @@ def _grade_leg(
     fmt = "%Y-%m-%dT%H:%M:%S"
     rows = conn.execute(
         """
-        SELECT player_name, map_number, kills, headshots, match_id, played_at
+        SELECT player_name, map_number, kills, headshots, match_id, played_at,
+               team, opponent
         FROM player_maps
         WHERE played_at >= ? AND played_at <= ?
         ORDER BY played_at, match_id, map_number
@@ -176,6 +206,21 @@ def _grade_leg(
         mine = [r for r in rows if _same_person(r[0], player)]
     if not mine:
         return "pending", None
+    # OPPONENT check: the prop names who the player was facing, and a match
+    # against anyone else is a DIFFERENT game no matter how well its time
+    # fits. On 2026-08-28 The Huns vs Rare Atom never reached bo3.gg, and
+    # controlez's leg was graded off his NEXT match (vs Alter Ego, 24h later
+    # — inside the 26h skew window). Time windows cannot catch this case;
+    # only the opponent can. Legs whose real match is missing now stay
+    # pending for manual grading instead of silently scoring the wrong game.
+    prop_opp = _prop_opponent(conn, player, stat, line, lo, hi, placed_at)
+    if prop_opp:
+        ok = [r for r in mine
+              if _team_matches(prop_opp, str(r[7] or ""))
+              or _team_matches(prop_opp, str(r[6] or ""))]
+        if not ok:
+            return "pending", None
+        mine = ok
     # WHICH match? Taking the earliest one after placement is wrong: players
     # routinely play twice in a day, and the prop names a specific opponent.
     # Measured 2026-07-26 — frontales and kade0 both played INFINITE at 11:00
@@ -187,7 +232,7 @@ def _grade_leg(
     start = _prop_start_epoch(conn, player, stat, line, lo, hi, placed_at)
     if start is not None:
         best, best_gap = None, None
-        for _p, _mn, _k, _h, mid, at in mine:
+        for _p, _mn, _k, _h, mid, at, _t, _o in mine:
             ts = _epoch(str(at))
             if ts is None:
                 continue
@@ -214,7 +259,8 @@ def _grade_leg(
             return "pending", None
     else:
         match_id = mine[0][4]  # no archived prop — fall back to earliest
-    maps = [(mn, k, h) for _p, mn, k, h, mid, _at in mine if mid == match_id]
+    maps = [(mn, k, h)
+            for _p, mn, k, h, mid, _at, _t, _o in mine if mid == match_id]
     n_played = max(mn for mn, _k, _h in maps)
     lo_i, hi_i = int(lo), int(hi)
     if n_played < lo_i:

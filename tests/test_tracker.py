@@ -300,3 +300,52 @@ def test_manual_grade_never_overwrites_an_auto_grade(tmp_path: Path) -> None:
 
 def _only_slip(conn: "sqlite3.Connection") -> str:
     return str(conn.execute("SELECT slip_id FROM slips").fetchone()[0])
+
+
+def test_wrong_opponent_match_stays_pending(tmp_path: Path) -> None:
+    """The prop names an opponent; a time-window match against anyone else
+    is a DIFFERENT game. controlez (2026-08-28, vs Rare Atom): the real
+    match never reached bo3.gg and the grader scored his NEXT match (vs
+    Alter Ego, 24h later, inside the 26h skew window). With the opponent
+    guard, that leg stays pending for manual grading."""
+    conn = db.connect(tmp_path / "t.db")
+    # archived prop: controlez vs RA, starting shortly after placement
+    conn.execute(
+        "INSERT INTO props (scanned_at, projection_id, player_id,"
+        " player_name, team, opponent, stat_type, stat_kind, map_lo, map_hi,"
+        " line_score, board, start_time, league_id) VALUES"
+        " (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (PLACED - 600, "x1", "c1", "controlez", "HUNS", "RA",
+         "MAPS 1-2 Kills", "kills", 1, 2, 27.5, "standard",
+         "2026-07-20T13:00:00Z", "u"),
+    )
+    # only ingested match in the window: NEXT DAY, wrong opponent
+    db.save_match_maps(conn, "m9", [
+        _row("controlez--", 24, 9, 1, "m9", "2026-07-21T05:20:00+00:00"),
+        _row("controlez--", 9, 3, 2, "m9", "2026-07-21T06:20:00+00:00"),
+    ], "c", "2026-07-21", 2)
+    conn.execute("UPDATE player_maps SET team='The Huns Esports',"
+                 " opponent='Alter Ego'")
+    conn.commit()
+    track_slip(conn, "underdog", 1.0,
+               [parse_leg("controlez under 27.5 kills 1-2")],
+               placed_at=PLACED)
+    grade_open_slips(conn)
+    st = conn.execute("SELECT status FROM slip_legs").fetchone()[0]
+    assert st == "pending"  # wrong-opponent match must NOT grade the leg
+    # same match but with the RIGHT opponent: grades normally
+    conn.execute("UPDATE player_maps SET opponent='Rare Atom'")
+    conn.commit()
+    grade_open_slips(conn)
+    st, obs = conn.execute(
+        "SELECT status, observed FROM slip_legs").fetchone()
+    assert (st, obs) == ("lost", 33.0)  # 33 > 27.5 on an under
+
+
+def test_team_abbreviation_matching() -> None:
+    from cs2props.tracker import _team_matches
+
+    assert _team_matches("RA", "Rare Atom")        # initials
+    assert _team_matches("EXR", "ex-RUSTEC")       # prefix after cleaning
+    assert not _team_matches("RA", "Alter Ego")
+    assert not _team_matches("NL", "Iowa Stormboar")
