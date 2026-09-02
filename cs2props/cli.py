@@ -130,6 +130,26 @@ def cmd_backfill(args: argparse.Namespace) -> int:
             for game in games:
                 stats = client.fetch_players_stats(game["id"])
                 rows.extend(stats_to_rows(match, game, stats))
+            if not rows:
+                # bo3.gg flags matches finished BEFORE posting player stats.
+                # Marking such a match ingested checks it off forever with
+                # zero rows — found 2026-08-30 with 1,635 phantom ingests
+                # (18% of the archive) silently starving both grading and
+                # the model's history. Retry while fresh; give up only once
+                # the stats have had 3 days to appear.
+                from cs2props.ingest.bo3gg import parse_iso as _piso
+                from datetime import datetime as _dt
+                from datetime import timezone as _tz
+
+                start = match.get("start_date")
+                age_h = ((_dt.now(_tz.utc) - _piso(start)).total_seconds()
+                         / 3600 if start else 0.0)
+                if age_h < 72:
+                    log.info("stats not posted yet for %s (%.0fh old) — "
+                             "will retry next run", mid, age_h)
+                    continue
+                log.info("giving up on %s — finished %.0fh ago with no "
+                         "stats (forfeit or unpublished)", mid, age_h)
             db.save_match_maps(
                 conn, mid, rows, match.get("tier"),
                 match.get("start_date"), len(games),
