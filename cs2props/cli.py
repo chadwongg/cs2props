@@ -549,6 +549,14 @@ def cmd_scan(args: argparse.Namespace) -> int:
             feed_only.append(_ud)
     except Exception as exc:  # a reference feed must never break a scan
         log.warning("underdog feed unavailable (%s)", exc)
+        # ...but it must be LOUD on the page. The 2026-09 rebrand killed the
+        # v5 feed and the only signal was this log line: the board silently
+        # halved for days and looked like an EV drought. An unreachable book
+        # renders as a red section, not an absence.
+        boards.append((
+            "underdog", "Underdog", [],
+            f"FEED DOWN — {type(exc).__name__}: {str(exc)[:120]}",
+        ))
     # PrizePicks: fetch live from the partner host, which is not behind the
     # Cloudflare gate that forced two days of hand-saving pp.json. The disk
     # cache is now a FALLBACK for when the fetch fails, not the primary path

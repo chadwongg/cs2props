@@ -344,7 +344,7 @@ def _book_section(b: BookView) -> str:
 <section class="book {b.book}" id="board-{b.book}">
   <div class="book-head">
     <span class="book-badge {b.book}">{html.escape(b.display)}</span>
-    <span class="book-meta">{html.escape(b.board_label)} ·
+    <span class="book-meta{' feed-down' if 'FEED DOWN' in b.freshness else ''}">{html.escape(b.board_label)} ·
       {html.escape(b.freshness)}</span>
   </div>
   {slips}
@@ -607,6 +607,7 @@ color:var(--pp);border:1px solid color-mix(in srgb,var(--pp) 40%,transparent)}}
 .book-badge.underdog{{background:color-mix(in srgb,var(--ud) 14%,transparent);
 color:var(--ud);border:1px solid color-mix(in srgb,var(--ud) 40%,transparent)}}
 .book-meta{{font-size:12px;color:var(--muted)}}
+.book-meta.feed-down{{color:var(--bad);font-weight:700}}
 .slip{{background:var(--panel);border:1px solid var(--line);
 border-radius:14px;padding:16px 18px;margin-bottom:14px}}
 .book.prizepicks .slip{{border-left:3px solid
