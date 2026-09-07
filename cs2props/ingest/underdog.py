@@ -1,9 +1,17 @@
-"""Underdog Fantasy lines ingestion (open API, no Cloudflare).
+"""Underdog lines ingestion (open API, no Cloudflare).
 
-Feed: GET https://api.underdogfantasy.com/beta/v5/over_under_lines
-Shape: flat arrays — ``over_under_lines`` (line + options), ``appearances``
-(player↔match join), ``players`` (sport_id "CS"), ``games`` (match meta with
-``abbreviated_title`` like "RRQ @ ZETA").
+Feed (since the 2026-09 underdogsports.com rebrand — the old
+``/beta/v5/over_under_lines`` returns 426 Upgrade Required):
+GET /v1/lobbies/content/lines?filter_id=<market>&filter_type=PickemStat
+with the ``product`` / ``product_experience_id`` / ``state_config_id``
+query params the web app sends. Works unauthenticated; the endpoint and
+params were captured off the live app's network traffic 2026-09-07. One
+request per market filter (kills, headshots), merged.
+
+Shape: same entities as v5 — ``over_under_lines`` (line + options),
+``appearances`` (player-match join), ``players``, ``games``
+(``abbreviated_title`` like "ALL vs FaZe") — but containers are now DICTS
+keyed by id instead of arrays; ``_vals`` normalizes.
 
 Output is the same :class:`~cs2props.ingest.prizepicks.Prop` dataclass, so
 everything downstream is source-agnostic. Underdog stat keys look like
@@ -32,7 +40,34 @@ from cs2props.ingest.prizepicks import Prop
 log = logging.getLogger(__name__)
 
 BASE_URL = "https://api.underdogfantasy.com"
-LINES_PATH = "/beta/v5/over_under_lines"
+LINES_PATH = "/v1/lobbies/content/lines"
+# Query params the web app sends. product_experience_id / state_config_id
+# look session-ish but are stable app config (identical across sessions and
+# work from a cold curl); if Underdog rotates them, capture fresh ones from
+# the app's network tab and fail loudly in the meantime.
+LOBBY_PARAMS = {
+    "include_live": "true",
+    "product": "fantasy",
+    "product_experience_id": "c7ade3c1-71ae-4593-a7e1-07f63c7e94ae",
+    "show_mass_option_markets": "false",
+    "sport_id": "CS",
+    "state_config_id": "725014ef-3570-4e93-871d-d69674ab3521",
+}
+# Per-market filter ids (the market_filters discovery endpoint requires app
+# tokens, so these are pinned from the app's own requests; a retired id
+# yields zero lines, which fetch_lines treats as an error, never as an
+# empty board).
+MARKET_FILTERS = {
+    "kills": "17f53e7e-4ea7-4400-ac0b-658178fb2320",
+    "headshots": "24ed46e4-7baf-4a00-8190-c721709a0c52",
+}
+
+
+def _vals(container: "list[Any] | dict[str, Any] | None") -> list[Any]:
+    """v5 shipped arrays, v1/lobbies ships id-keyed dicts — accept both."""
+    if isinstance(container, dict):
+        return list(container.values())
+    return list(container or [])
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -70,11 +105,11 @@ def _team_names(game: dict[str, Any]) -> tuple[str | None, str | None]:
 
 def parse_lines(payload: dict[str, Any], sport_id: str = "CS") -> list[Prop]:
     """Parse an over_under_lines payload into Props (CS only by default)."""
-    players = {p["id"]: p for p in payload.get("players", [])}
-    appearances = {a["id"]: a for a in payload.get("appearances", [])}
-    games = {g["id"]: g for g in payload.get("games", [])}
+    players = {p["id"]: p for p in _vals(payload.get("players"))}
+    appearances = {a["id"]: a for a in _vals(payload.get("appearances"))}
+    games = {g["id"]: g for g in _vals(payload.get("games"))}
     props: list[Prop] = []
-    for line in payload.get("over_under_lines", []):
+    for line in _vals(payload.get("over_under_lines")):
         if line.get("status") not in (None, "active"):
             continue
         ou = line.get("over_under") or {}
@@ -163,6 +198,11 @@ class UnderdogClient:
         )
 
     def fetch_lines(self) -> dict[str, Any]:
+        """One merged payload across the pinned market filters.
+
+        Entities are merged by id (a player appearing in both the kills and
+        headshots response is the same row); lines never collide because
+        each belongs to exactly one market."""
         cache = self.cache_dir / "over_under_lines.json"
         if cache.exists():
             wrapper = json.loads(cache.read_text())
@@ -178,10 +218,33 @@ class UnderdogClient:
                 log.info("rate limit: sleeping %.1fs", wait)
                 time.sleep(wait)
         self._stamp.touch()
-        log.info("GET %s%s", BASE_URL, LINES_PATH)
-        resp = self._client.get(LINES_PATH)
-        resp.raise_for_status()
-        payload_live: dict[str, Any] = resp.json()
+        merged: dict[str, dict[str, Any]] = {
+            k: {} for k in ("over_under_lines", "appearances", "players",
+                            "games")
+        }
+        for market, filter_id in MARKET_FILTERS.items():
+            params = dict(LOBBY_PARAMS)
+            params.update({"filter_id": filter_id,
+                           "filter_type": "PickemStat"})
+            log.info("GET %s%s (%s)", BASE_URL, LINES_PATH, market)
+            resp = self._client.get(LINES_PATH, params=params)
+            resp.raise_for_status()
+            part = resp.json()
+            n = len(_vals(part.get("over_under_lines")))
+            if n == 0:
+                # a retired filter id must be loud, not an empty board
+                raise RuntimeError(
+                    f"underdog returned ZERO {market} lines — the pinned "
+                    f"filter_id {filter_id} has likely been rotated; "
+                    "capture a fresh one from the app's network tab"
+                )
+            for key in merged:
+                for item in _vals(part.get(key)):
+                    merged[key][str(item["id"])] = item
+            time.sleep(1.0)  # polite inter-market gap
+        payload_live: dict[str, Any] = {
+            k: list(v.values()) for k, v in merged.items()
+        }
         cache.write_text(
             json.dumps({"fetched_at": time.time(), "payload": payload_live})
         )

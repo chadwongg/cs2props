@@ -138,7 +138,9 @@ def test_client_caches(tmp_path: Any) -> None:
     )
     assert len(client.fetch_board()) == 2
     assert len(client.fetch_board()) == 2
-    assert calls["n"] == 1
+    # one request PER MARKET FILTER (kills + headshots) on the cold fetch;
+    # the second fetch_board is served entirely from cache
+    assert calls["n"] == len(ud.MARKET_FILTERS)
 
 
 def _one_line_payload(line_type: str, options: list[dict]) -> dict:
